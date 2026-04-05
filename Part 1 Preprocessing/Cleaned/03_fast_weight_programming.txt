@@ -1,0 +1,1178 @@
+Published in Transactions on Machine Learning Research (12/2025)
+Fast weight programming and linear transformers:
+from machine learning to neurobiology
+Kazuki Irie∗
+kirie@fas.harvard.edu
+Department of Psychology and Center for Brain Science
+Harvard University, Cambridge, MA, USA
+Samuel J. Gershman∗
+gershman@fas.harvard.edu
+Department of Psychology and Center for Brain Science
+Kempner Institute for the Study of Natural and Artificial Intelligence
+Harvard University, Cambridge, MA, USA
+Reviewed on OpenReview: https: // openreview. net/ forum? id= TDG8EkNmQR
+Abstract
+Recent advances in artificial neural networks for machine learning, and language modeling
+in particular, have established a family of recurrent neural network (RNN) architectures
+that, unlike conventional RNNs with vector-form hidden states, use two-dimensional (2D)
+matrix-form hidden states. Such 2D-state RNNs, known as Fast Weight Programmers
+(FWPs), can be interpreted as a neural network whose synaptic weights (called fast weights)
+dynamically change over time as a function of input observations, and serve as short-term
+memory storage; corresponding synaptic weight modifications are controlled or programmed
+by another network (the programmer) whose parameters are trained (e.g., by gradient
+descent). In this Primer, we review the technical foundations of FWPs, their computational
+characteristics, and their connections to transformers and state space models. We also
+discuss connections between FWPs and models of synaptic plasticity in the brain, suggesting
+a convergence of natural and artificial intelligence.
+Introduction
+While early development of artificial neural networks (ANNs) was loosely inspired by neuroscience (McCulloch
+and Pitts, 1943; Rosenblatt, 1958; Fukushima, 1980)1, ANNs have rapidly evolved into an independent
+subfield of machine learning (ML) and artificial intelligence (AI) on their own (Rumelhart et al., 1986b;
+McClelland et al., 1986; Ivakhnenko, 1971; LeCun et al., 2015; Schmidhuber, 2015). While some argue for
+the continued influence of neuroscience on the development of ANNs (Zador et al., 2023; Hassabis et al.,
+2017; Macpherson et al., 2021), in reality, progress in ANNs has been largely driven by the core pursuits of
+computer scientists to develop ever more powerful, general, and efficient ML models, rather than through
+their original motivation to model brain computation under neurobiological constraints (Gershman, 2024). In
+a twist of fate, such a detachment of the ANN research from the traditional goals of neuroscience has led
+to more open-ended and flourishing developments in ANN models, which, in turn, have attracted interest
+from cognitive neuroscientists, as they represent the best existing computational systems for processing
+vision, audio, and language (Achiam et al., 2023; Pratap et al., 2024)—modalities that are central to human
+cognition in real-life scenarios. Such successes of ANNs have stimulated many cognitive neuroscientists to
+seriously examine ML-driven models as hypotheses to explain neural computation in the brain (Kriegeskorte,
+2015; Yamins and DiCarlo, 2016; Schrimpf et al., 2021; Gershman et al., 2025).
+∗Kazuki Irie and Sam Gershman took the lead in writing the machine learning and neuroscience sections, respectively.
+1Mathematically, linear regression as introduced by Gauss and Legendre (Legendre, 1805; Stigler, 1981) is equivalent to a
+shallow “neural network” and predates these lines of work.
+arXiv:2508.08435v5  [cs.LG]  18 Mar 2026
+Published in Transactions on Machine Learning Research (12/2025)
+However, given the rapid progress in ML, there is still a significant gap between the computational modeling
+toolkits in the two fields. In particular, boosted by the recent successes of ChatGPT (Achiam et al., 2023)
+and other language models, a myriad of sequence processing neural network architectures have been proposed
+to improve upon the standard transformer architecture (reviewed later) (Vaswani et al., 2017). While keeping
+track of every such models has become particularly challenging today, as the lack of formal naming conventions
+makes their (often obvious) mathematical relations opaque (e.g., how does “Mamba2” (Dao and Gu, 2024)
+relate to “Gated Linear Attention” (Yang et al., 2024a)?; answered in Sec. 3.4), it seems useful to summarize key
+elements of such advances in sequence and memory modeling in ML that are arguably relevant to neuroscience.
+In this Primer, we present a special family of recurrent neural networks (RNNs; Elman (1989); Jordan (1986))
+called Fast Weight Programmers (FWPs; Schmidhuber (1992b); Schlag et al. (2021a); Irie et al. (2021)), that
+has been well established in machine learning, but has yet to see broad dissemination and application within
+the neuroscience community. Unlike the conventional RNN with one-dimensional vector-form hidden states,
+states in FWPs are two-dimensional (2D) matrices (see Figure 1 for illustrations). As we will argue, such
+2D-state RNNs are particularly relevant for neuroscience, as the matrix-form states can be interpreted as
+time-varying synaptic weights that maintain short-term memory—unlike conventional RNNs, in which all the
+synaptic weights are fixed after training.
+Additionally, FWPs naturally introduce a novel perspective on achieving biologically compatible local learning
+in ANNs, with an intuitive connection to the now-popular ML concept of in-context learning. Overall, FWPs
+may address certain longstanding limitations of ANNs as models of their biological counterpart, by providing
+a novel timescale for learning and memory.
+The FWP concept is an entry point for understanding a multitude of sequence models recently proposed in
+machine learning. In fact, many such models can be directly expressed as an instantiation of FWPs, with a
+specific choice of the update rule used to modify the fast synaptic weights (see Table 1 for a preview); and we
+also review a formal connection between FWP and the transformer architecture (Vaswani et al., 2017).
+We hope this Primer will stimulate neuroscientists to rethink computational modeling of certain neurobiological
+features in ANNs, through unique properties of FWPs; and help them familialize with the state-of-the-art
+sequence and memory models from machine learning.
+Glossary (Machine Learning)
+• Efficient sequence model: a parameterized sequence model whose training can be parallelized over
+the sequence length, and whose inference time-complexity is linear in sequence length.
+• In-context learning: an ability of a sequence model to learn a new task when a sequence of task
+demonstrations is fed to its input.
+• Metalearning: a process of leveraging learning experiences to acquire or improve the ability to learn.
+• Model expressivity: the range of computations the model can perform.
+• Sequence processing neural networks: a type of artificial neural network designed to handle a
+sequence of inputs.
+Preliminaries
+Before delving into fast weight programmers (FWPs) in the next section, we briefly review some of the
+conventional, general-purpose sequence processing neural networks: the conventional RNN (Elman, 1989;
+1990) (Sec. 2.1) and related state space models (Sec. 2.2), and the transformer neural network (Vaswani et al.,
+2017) (Sec. 2.3). This will be useful later for contrasting, relating and characterizing properties of FWPs
+compared to these conventional sequence models.
+Note that our main focus here is on sequence processing RNNs, rather than other “non-sequential RNNs”
+such as Amari-Little-Hopfield networks (Amari, 1972; Little, 1974; Hopfield, 1982). We also assume that
+readers are familiar with the general idea of machine learning that “trainable parameters” of a model can
+Published in Transactions on Machine Learning Research (12/2025)
+Figure 1: An Illustration of sequence processing in a: conventional recurrent neural networks (RNNs), b:
+fast weight programmers (FWPs), and c: transformers. One time step of recurrent computation is shown. In
+all figures, colored circles indicate time-step specific variables (green) that are not retained for the next
+time step, temporally changing model state/short-term memory (yellow), and model parameters that are
+fixed/frozen after training (blue). In particular, the hidden state Wt of an FWP is a context-dependent
+time-varying matrix, whereas the hidden state of a conventional RNN st is a vector, and that of a transformer
+is the key-value memory matrices Kt and Vt whose size grows linearly with the sequence length. In b, black
+arrows indicate computation in the fast/main net of the FWP, while the remaining gray arrows correspond
+to the computation performed by the slow/programmer net. Activation functions and variables that are
+specific to certain variants of FWPs (such as a dynamic learning rate or state decay factor) are omitted for
+clarify; see Table 1 for a specific choice of the update rule used in various models.
+Published in Transactions on Machine Learning Research (12/2025)
+be trained by using some learning algorithm (e.g., backpropagation through time; BPTT (Rumelhart et al.,
+1986a; Werbos, 1990)) given some dataset or environment and an objective function to be optimized.
+Throughout our Primer, t, τ, T, H, d, dkey, din and dout denote positive integers; ⊙and ⊗denote
+element-wise multiplication and outer product, respectively. Our vectors are column vectors, which implies
+that outer product also writes as a ⊗b = ab⊤∈Rn×m for arbitrary vectors a ∈Rn and b ∈Rm (this remark
+is useful to recognize outer products in certain equations).
+2.1
+Conventional recurrent neural networks
+At every time step t, the conventional sequence processing RNN with a hidden state st−1 ∈Rdout, receives an
+input xt ∈Rdin and produces an output st ∈Rdout as follows:
+st = σ(W Rst−1 + W Ixt)
+(1)
+where σ is an activation function (e.g., tanh), and W R ∈Rdout×dout and W I ∈Rdout×din are recurrent and
+input weight matrices, respectively, which are the trainable parameters of the model. The initial state s0 is
+typically set to the “zero vector” whose entries are all zero. We omit the additive bias term inside σ which is
+irrelevant for our discussion. See Figure 1a for an illustration.
+Note that, in machine learning, this RNN architecture is never used as-is in practice today, as it is known to
+critically suffer from the classic “vanishing gradient problem” (Hochreiter, 1991; Bengio et al., 1994; Hochreiter
+et al., 2001a) when trained using a gradient-descent based learning algorithm, and to yield sub-optimal
+performance in practice (note that another well-known problem, the “exploding gradient problem” can be
+rather easily remediated by heuristically clipping/truncating large gradients to a certain value (Graves, 2013;
+Mikolov, 2012)). Instead, more sophisticated “gated architectures” such as long short-term memory (LSTM
+(Hochreiter and Schmidhuber, 1997; Gers et al., 2000; Greff et al., 2016)) are typically used. The core
+temporal dynamics of LSTMs maintains two recurrent states ct ∈Rdout and st ∈Rdout:
+ct = rt ⊙ct−1 + it ⊙zt
+(2)
+st = ot ⊙tanh(ct)
+(3)
+where the “gate functions” rt, it, ot ∈Rdout and “cell input” zt ∈Rdout (ct is often referred to as “cell state”)
+are all parameterized functions of the recurrent state st−1 and an input xt as in Eq. 1.
+Nevertheless, the vanilla RNN with the above Eq. 1 is sufficient as a contrastive example to later highlight
+the unique properties of FWPs. In this RNN model, during training, the “synaptic weights” W R and W I are
+modulated by the learning algorithm (typically by using gradients computed through backpropagation through
+time); however, once the training ends, these weights become frozen and immutable. At test time, the state
+vector st is the only time-varying variables which carry the model’s short-term memory to process sequence
+elements over time. Later, we will show how FWPs critically differ from the conventional RNN on this aspect.
+2.2
+State Space Models
+Given the current ML research trend (Tiezzi et al., 2025) of developing efficient sequence models—defined as
+models for which training can be parallelized over the time dimension, whereas inference time-complexity is
+linear in sequence length (Yau et al., 2025), the so-called “state space models (SSMs)” or “linear RNNs” have
+become popular (Gu et al., 2022; 2021). An SSM can be directly obtained from the conventional RNN above
+by simply removing the (non-linear) activation function σ in Eq. 1:
+st = W Rst−1 + W Ixt
+(4)
+While deriving such a model from the original RNN is straightforward, this model is also known as a “linear
+time-invariant dynamical system” (which is originally defined through a continuous-time differential equation,
+whose discretization yields Eq. 4 exactly, which is typically followed by an extra equation yt = W Ost to
+produce the output vector yt ∈Rdout using an extra weight matrix W O ∈Rdout×dout). We do not further
+Published in Transactions on Machine Learning Research (12/2025)
+delve into such an alternative view here, as it provides no additional insight into the resulting computational
+model for our purpose.
+The definition of an SSM can be generalized to include models with time-varying weight matrices W R
+t
+∈
+Rdout×dout and W I
+t ∈Rdout×din indexed by t:
+st = W R
+t st−1 + W I
+t xt
+(5)
+By recognizing that such a definition can also express models in which st is a matrix instead of a vector, we
+will see a connection to fast weight programmers (Sec. 3).
+An interesting class of SSMs can be obtained by setting the weight matrices W R
+t
+and W I
+t in Eq. 5 to be
+diagonal matrices with diagonals rt ∈Rdout and it ∈Rdout (by setting dout = din), respectively; we obtain
+the following element-wise recurrence:
+st = rt ⊙st−1 + it ⊙xt
+(6)
+It should be noted that this equation is identical to the cell update in an LSTM (Eq. 2), except that, in this SSM,
+rt and it are functions of xt or a few earlier observations (e.g., the last four; xt, xt−1, xt−2, xt−3) only, i.e.,
+the “gate functions” are not recurrent (no dependency on st−1), and the cell input zt in Eq. 2 is reduced to xt.
+An efficient SSM can be obtained by deliberately using this linear element-wise recurrence of Eq. 6 as the
+core temporal processing operation of the model (no other form of recurrence is used). This choice has two
+crucial consequences: first, it enables training parallelism (i.e., there exists an efficient algorithm to compute
+st for all t in parallel (Martin and Cundy, 2018; Blelloch, 1990); which is not the case for the conventional,
+fully recurrent network); second, it sacrifices model expressivity, i.e., abilities to perform certain computations
+(Merrill et al., 2020; Grazzi et al., 2025; Merrill et al., 2024) (we discuss this further in Sec. 3.6)—as a side
+note, there is also a third consequence, which is that element-wise recurrence enables efficient online learning
+through a tractable real-time recurrent learning algorithm (Mozer, 1989; Gori et al., 1989; Zucchet et al.,
+2023; Irie et al., 2024), but further discussion is out of scope here.2
+This “cell-only LSTM” is currently often called “Mamba”, after the name of an efficient “hardware-aware
+implementation” (Gu and Dao, 2024), i.e., an implementation that takes into account the low-level memory
+hierarchy of modern graphic processing units (GPUs). However, we note that many have previously proposed
+similar models based on Eq. 6 under various names—including Quasi RNNs (Bradbury et al., 2017) and
+the Simple Recurrent Unit (Lei et al., 2018), among others (Balduzzi and Ghifary, 2016; Li et al., 2018;
+Gonnet and Deselaers, 2020)—to achieve improved efficiency over LSTM.
+2.3
+Transformer neural networks
+Here we review the Transformer neural network (Vaswani et al., 2017) which is today’s de facto standard
+sequence processing model architecture in ML. It also has a direct mathematical connection to FWPs
+(Schmidhuber, 1992b; Schlag et al., 2021a), as we will review in the next section.
+Transformer models come in three distinct variations: encoder-decoder (Vaswani et al., 2017), encoder-only (De-
+vlin et al., 2019), or decoder-only (Liu et al., 2018) architectures. We focus on the decoder-only (also known as
+the “causal model” architecture), which is a general-purpose sequence model used for example in language mod-
+els (Al-Rfou et al., 2019; Dai et al., 2019; Baevski and Auli, 2019; Irie et al., 2019) including OpenAI’s GPT se-
+ries (Radford et al., 2019; Brown et al., 2020); for brevity, we refer to this as “the” transformer architecture here.
+A typical transformer architecture consists of multiple layers, interleaving a “self-attention” layer (Parikh et al.,
+2016; Cheng et al., 2016; Lin et al., 2017; Bahdanau et al., 2015) and a two-layer feedforward block, each com-
+bined with a residual connection (He et al., 2016b;a; Srivastava et al., 2015) and a layer normalization operation
+(Ba et al., 2016b). Among these layers, the core temporal/memory processing operation in the transformer
+is carried out by the self-attention layer; therefore, we focus on describing its sequential dynamics here.
+2As a further aside, in theory the expressivity of such element-wise RNNs could be enhanced by using complex-valued
+diagonals in the recurrent weight matrix (Orvieto et al., 2023; Ran-Milo et al., 2024) (which yields expressivity of a real-valued
+full matrix); however, stable implementation thereof is often reported to be challenging in practice (Elelimy et al., 2024).
+Published in Transactions on Machine Learning Research (12/2025)
+Like the conventional RNN in Sec. 2.1, at every time step t, a causal self-attention layer receives an input
+xt ∈Rdin and produces an output yt ∈Rdout, while maintaining the so-called “key-value memory”, represented
+by two matrices Kt ∈Rdkey×t and Vt ∈Rdout×t as follows:
+qt = W Qxt ; kt = W Kxt ; vt = W V xt
+(7)
+Kt = [Kt−1,kt] ; Vt = [Vt−1, vt]
+(8)
+yt = Attention(Kt, Vt, qt) = Vtsoftmax(K⊤
+t qt)
+(9)
+=
+t
+X
+τ=1
+αt,τvτ
+(10)
+where qt, kt ∈Rdkey, vt ∈Rdout in Eq. 7 are different projections of the input—called query, key, and
+value, respectively— through matrices W Q ∈Rdkey×din, W K ∈Rdkey×din, and W V ∈Rdout×din which are
+the trainable parameters of the model. The operation [] as in [Kt−1, kt] denotes concatenation of vector
+kt ∈Rdkey to matrix Kt−1 ∈Rdkey×(t−1) along the time dimension, yielding Kt ∈Rdkey×t. K0 and V0 are
+initially empty. We omit the 1/
+p
+dkey scaling inside softmax, as well as the output projection, which are
+typically used but are irrelevant to our discussion here. In Eq. 10, αt,τ ∈R denotes the τ-th element of the
+vector softmax(K⊤
+t qt) ∈Rt. See Figure 1c for illustration.
+The computation in Eq. 9 is called “attention”, which is rather an intuitive name when we read Eq. 9 as (1)
+comparing the query vector from the current step t to the keys from all the time steps through dot product
+to produce a score for each of t keys (K⊤
+t qt ∈Rt), (2) sharpening and normalizing these similarity scores
+through the softmax function to obtain “attention scores” (αt,τ ≥0 for all τ from 1 to t with Pt
+τ=1 αt,τ = 1),
+and (3) using the resulting scores as coefficients to compute the weighted average of all the value vectors (as
+is explicitly shown in Eq. 10) to produce the output; this effectively implements a form of attention as the
+model focuses on certain key-value memory elements at each step t.3
+Additionally, practical transformers typically make use of “multi-head self-attention”, where multiple indepen-
+dent heads within the same layer perform self-attention in parallel. By introducing an extra hyper-parameter
+H as the number of heads, after projection of Eq. 7, each query/key/value vector is split into H sub-vectors
+of the same size (dkey and dout are set to be a multiple of H); the self-attention operation above is computed
+independently for the H sets of query/key/value vectors. The results from each head (each of size dout/H)
+are concatenated to produce the output yt ∈Rdout.
+One important distinction between the transformer and RNNs (Sec. 2.1) is their computational complexities.
+As we can see in Eq. 8, the size of key and value memory matrices linearly grows with the time step (i.e.,
+sequence length)—unlike in the conventional RNN whose state has a constant size. This results in quadratic
+time complexity w.r.t. sequence length in the attention computation of Eq. 9—whereas complexity is linear in
+RNNs (i.e., compute is constant per time step). Consequently, practical self-attention requires predetermining
+a maximum sequence length, also called context window size, and any old events that fall outside the window
+are discarded. On the other hand, training of a transformer can be highly efficient. All the computations
+above are parallelizable over the sequence element by introducing the so-called “attention mask” inside the
+softmax as follows. By denoting an input sequence with T elements as X = [x1, ..., xT ] ∈Rdin×T (Xt = xt
+for all t) and the outputs as Y = [y1, ..., yT ] ∈Rdout×T (and by analogously denoting queries, keys, and
+values for T steps as Q, K ∈Rdkey×T , and V ∈Rdout×T , respectively), parallel computation performs:
+Q = W QX ; K = W KX ; V = W V X
+(11)
+Y = V softmax(M ⊙(K⊤Q))
+(12)
+where M ∈RT ×T is the so-called attention mask. These equations are equivalent to the sequential Eqs. 7-9
+by setting M to be the upper triangular matrix, i.e., Mi,j = 1 if i ≤j and Mi,j = −∞otherwise; which
+explicitly sets certain attention weights to zero, as the causal model cannot access data from the future.
+Practical implementations of transformers have been highly optimized. In particular, an efficient hardware-
+aware implementation is available (Dao, 2023), leveraging the “online softmax algorithm” (Rabe and Staats,
+3It has been recognized that Eq. 9 can also be interpreted as a single-step iteration that minimizes a special energy function
+defining an Amari-Little-Hopfield network; we refer to Ramsauer et al. (2021) for further details.
+Published in Transactions on Machine Learning Research (12/2025)
+2021; Milakov and Gimelshein, 2018), which significantly reduces memory requirement (crucial for GPU
+efficiency) compared to the naive algorithm that explicitly stores K⊤Q ∈RT ×T in Eq. 12; we refer to Dao
+(2023) for further details.
+Fast Weight Programmer Neural Networks
+Here we present the concept of fast weight programming, and the resulting sequence models as well as their
+key properties.
+3.1
+Basic Instantiation: FWP with a purely additive update rule
+Before introducing the general definition of fast weight programmers in the next Sec. 3.2. Here we first
+provide the most basic instantiation of FWPs: an “FWP with a purely additive outer product update rule”
+(Schmidhuber, 1992b) as an illustrative example; we refer to it as “vanilla FWP”.
+Like the conventional RNN and transformer, a vanilla FWP is a general-purpose sequence model. At every
+time step t, the model receives an input xt ∈Rdin and produces an output yt ∈Rdout, while maintaining the
+so-called “fast weight” matrix Wt ∈Rdout×dkey as a short-term memory storage, as follows:
+qt = W Qxt ; kt = W Kxt ; vt = W V xt
+(7)
+Wt = Wt−1 + vt ⊗ϕ(kt)
+(13)
+yt = Wtϕ(qt)
+(14)
+where Eq. 7 is the same as in the transformer (Sec. 2.3) with trainable parameters W Q ∈Rdkey×din,
+W K ∈Rdkey×din, and W V ∈Rdout×din; and as we’ll discuss in Sec. 3.3, the connection between this model
+and the transformer does not end here. ϕ is an activation function we discuss later (while the activation on v
+is optional, in practice it is often also applied to v). The “fast weight matrix“ Wt ∈Rdout×dkey in Eq. 13 is
+initially set to 0, i.e., W0 = 0. See Figure 1b for illustration.
+This model can be viewed as a system of two networks (Schmidhuber, 1992b) where one net—the slow
+net, corresponding to Eq. 7 (note that the three equations in Eq. 7 can be grouped into a single matrix
+multiplication by defining a “slow weight” matrix W slow = [W Q, W K, W V] ∈R(2∗dkey+dout)×dkey by row
+concatenation)—learns to program or train another net, the fast net (Eq. 14) by generating its weight changes
+(Eq. 13). The fast weight change is defined through an update rule; here Eq. 13 takes the functional form of a
+Hebbian-like learning rule (Konorski, 1948; Hebb, 1949) whose update term is a simple outer product term.4
+The connection to SSMs (Sec. 2.2) is also noticeable: Eq. 13 is essentially a linear RNN with 2-dimensional
+state Wt (which could potentially be flattened and operationalized to be a one-dimensional vector state).
+From a neuroscientific viewpoint, we may interpret this mechanism as rapid synaptic modulation (Panichello
+et al., 2024; Spaak and Wolff, 2025)—a property which is absent in the conventional RNNs (Sec. 2.1). Under
+this view, it might be natural not to consider the fast and slow net as representing the same type of “neural
+network” but rather, it may be more appropriate to consider the slow net as representing some “molecular
+network”—which is reminiscent of Denis Bray’s view on ANNs (Bray, 1995; 2003; 2009), implementing
+molecular mechanisms that support learning and memory in the (fast) neural network. We provide further
+neurobiological discussion in Sec. 4.
+From the memory system perspective, Eqs. 13-14 also correspond to an associative memory storing key/value
+pairs—also called correlation matrix memory (Kohonen, 1972) (see also Steinbuch and Piske (1963); Willshaw
+et al. (1969)), whose writing operation is an outer product of the key and value vectors (Eq. 13); and its
+reading/retrieval operation is a matrix-vector multiplication between the memory matrix and a query vector
+(Eq. 14). From a cognitive science view point, this model can also be seen as a learnable 2D version of the “tensor
+product representations” (outer product is the 2D tensor product) (Smolensky, 1990; Schlag and Schmidhuber,
+2018; Schlag et al., 2019; 2021b)—an ANN model to bind two pieces of information (Greff et al., 2020).
+4Indeed, a very similar model was more recently proposed (Limbacher and Legenstein, 2020), with a neuroscientific motivation
+to leverage Hebbian plasticity for sequence processing, and later extended to spiking neural networks (Limbacher et al., 2023);
+see also Najarro and Risi (2020).
+Published in Transactions on Machine Learning Research (12/2025)
+3.2
+Core Concept
+As is examplified by the model in Sec. 3.1, a fast weight programmer (FWP) (Schmidhuber, 1992b; Irie et al.,
+2021) is defined as a neural network system in which one (sub)network, called slow net, generates modifications
+to weights of another (sub)network, called fast net, as a function of a sequence of input observations. By
+conceptualizing weights of a neural network as its program/software (Schmidhuber, 1990a), such a slow net
+which modifies the weights of a fast net is a programmer. The weights of the fast net are fast, because they
+can rapidly change as a response to observations received at every time step, while those of the slow net are
+slow because they are typically trained by some learning algorithm that updates slow weights on the sequence
+level (and they typically become fixed after training).5
+In most of the existing and practical FWP models, both fast and slow nets are one-layer networks, and
+the weight update rule is some outer-product based one. However, the general concept of fast weight
+programming is more general and has no such a restriction (Irie et al., 2021); in principle, more complex (e.g.,
+deeper) slow/fast nets or other update rules could be used. In fact, the core concept of FWPs is the idea of
+training a network to train (e.g., generate weights of) another network—an idea which has been rebranded as
+“hypernetworks” (Ha et al., 2017) in the modern deep learning literature6. One common challenge though is to
+deal with the high-dimensionality of ANN weights, which are typically too large to be directly parameterized
+as outputs of an ANN (except for tiny networks (Gomez and Schmidhuber, 2005)). The use of outer product
+elegantly overcomes this challenge by generating two small vectors instead of one large matrix, and it’s
+arguably more practical compared to other alternative methods that rely on weight compression (Irie and
+Schmidhuber, 2021) or sparsity (Munkhdalai, 2020).
+Another issue is that naively applying the BPTT learning algorithm to FWP would require storing all the
+intermediate weight matrices for each time step for backpropagation, which would yield memory requirements
+that can easily exceed the amount of memory available on GPUs. Therefore, practical FWP model designs
+also require compute-efficient recomputability of fast weights (e.g., through reversibility of the update rule;
+we refer to the corresponding discussions in prior work (Schlag et al., 2021a; Irie and Schmidhuber, 2021)) or
+chunk-wise processing (see Box 1).
+As a historical note, McCulloch and Pitts (1943) also discussed recurrence and dynamic synapses (which
+they called ‘circle’ and ‘alterable synapses’, respectively) in their seminal paper on ANNs. Their proposal
+was to replace dynamic synapses by recurrence which can potentially simulate the effect of dynamic synapses
+(see their informal “theorem 7”). However, fixed weights of ANNs were later criticized as a limitation from
+both the theoretical neuroscience and machine learning standpoints (von der Malsburg, 1981; Feldman, 1982;
+McClelland, 1985), and the possibility to introduce fast synaptic modulations was investigated. In particular,
+von der Malsburg (1981) and Hinton and Plaut (1987) proposed networks whose effective weights are defined
+as a multiplicative (von der Malsburg, 1981) or additive (Hinton and Plaut, 1987) superposition of fast and
+slow changing weights. However, none of these early works has proposed a mechanism to learn the dynamics
+of synapses (e.g., Hinton and Plaut (1987) merely used two different learning rates for the fast and slow
+weights, while jointly training both sets of weights through the same gradient descent learning algorithm).
+It was only in the early 1990s that end-to-end differentiable and learnable synaptic modulation dynamics
+above (originally called “fast weight controllers”), featuring the “programming” part—the ‘P’ in FWP—was
+proposed (Schmidhuber, 1991; 1992b), as an alternative to the conventional recurrence (Sec. 2.1) and was also
+computationally motivated by the idea of reducing the ratio of trainable parameters to temporally changing
+variables in sequence processing networks (Schmidhuber, 1993b). The FWP concept has seen a recent
+revival (Schmidhuber, AI Blog, 2021; Irie and Schmidhuber, 2022) mainly due to its formal connection to the
+transformer and its potential to overcome certain limitations of transformers (as we’ll see in the next sections).
+5This fast-slow terminology may not be ideal in special cases where a fully online learning algorithm—such as real-time
+recurrent learning with an update frequency of one time step, is used to learn the slow weights which are consequently also
+updated at every time step. However, such learning algorithms are uncommon in practice (see, e.g., Irie et al. (2024)), and this
+terminology remains generally appropriate and captures the characteristic timescale differences underlying FWPs.
+6One popular form of hypernetworks generates gains (i.e., scalars) to dynamically scale rows or columns of a weight matrix of
+another network (Ha et al., 2017; Perez et al., 2018; Jayakumar et al., 2020), which has also been explored in computational
+neuroscience (see, e.g., Rao et al. (2023); Rao (2024); Costacurta et al. (2024)); we’ll discuss below how the FWP framework
+can support many other forms of synaptic weight modifications, thereby expanding the existing toolbox for modeling dynamic
+synapses in computational neuroscience (e.g., Tsodyks et al. (1998); Maass and Markram (2002); see also Shon and Rao (2003)).
+Published in Transactions on Machine Learning Research (12/2025)
+3.3
+Formal Connection to Transformers
+Here we present the formal connection between the vanilla FWP (Sec. 3.1) and the transformer (Sec. 2.3).7
+We discuss this relation in two didactic steps by looking into (1) a transformer without softmax, and (2) a
+transformer with an alternative (but still normalized) attention-score function.
+Transformer without softmax.
+First, we examine the consequence of simply removing the softmax in
+the self-attention of Eq. 9, which yields:
+yt = Vt(K⊤
+t qt) = (VtK⊤
+t )qt
+(15)
+The removal of softmax opens up the possibility to reorganize the computation by first multiplying VtK⊤
+t
+before multiplying it with the query qt. By denoting this key-value product as Wt = VtK⊤
+t ∈Rdout×dkey,
+we can further express it in terms of the column vectors in each of the key and value matrices (recall their
+definition of Eq. 8) as in the following Eq. 16:
+Wt = VtK⊤
+t =
+t
+X
+τ=1
+vτ ⊗kτ
+(16)
+= Wt−1 + vt ⊗kt
+(17)
+Further isolating the last term in the sum of Eq. 16 yields the above Eq. 17 which expresses a recurrent
+formula for Wt. Overall, the sequential dynamic of the transformer without softmax can be rewritten as:
+qt = W Qxt ; kt = W Kxt ; vt = W V xt
+(7)
+Wt = Wt−1 + vt ⊗kt
+(17)
+yt = Wtqt
+(18)
+which we can recognize as being identical to the vanilla FWP in Sec. 3.1, up to the missing activation function
+applied to qt and kt. This means that, the exact input/output mapping of a transformer without softmax
+can be equivalently expressed by an FWP.
+This equivalence result may be intriguing at first, because even without the softmax, the transformer model
+stores a key-value memory storage that grows with the sequence length (potentially to infinity), while the
+FWP has a fixed-size memory storage in the fast weight matrix (compare Figure 1b with Figure 1c). This
+highlights the role of softmax as a powerful retrieval function enabling sharp discrimination between a large
+set of memory elements; without such a discriminative retrieval function, a key-value memory system with
+even an infinitely growing memory size is merely as powerful as an FWP system with a fixed memory size.
+Transformer with linearized attention (Linear transformer).
+While the derivation above based on
+the simple removal of softmax is straightforward and captures the core matrix-algebra manipulation underlying
+the equivalence between the transformer and the vanilla FWP, we can also revisit the removal of the softmax,
+instead replacing the softmax-normalized attention score computation softmax(K⊤
+t qt) in Eq. 9 (the softmax
+kernel) by another kernel function, which computes the normalized attention scores (for τ from 1 to t) as:
+α′
+t,τ =
+ϕ(kτ)⊤ϕ(qt)
+Pt
+τ ′=1 ϕ(kτ ′)⊤ϕ(qt)
+(19)
+for an arbitrary function ϕ with a positive co-domain. Compared to the case above where we simply removed
+the softmax, we have extra ϕ applied to the keys and the query, and the denominator that normalizes the
+attention score. Despite these differences, we can similarly reorganize the computations in the corresponding
+7Hinton (2022) asks: “For sequential data, is it possible to use fast weights to mimic a simplified transformer?” The answer is
+yes, as shown in Schlag et al. (2021a), which we review here.
+Published in Transactions on Machine Learning Research (12/2025)
+self-attention computation as follows:
+yt =
+t
+X
+τ=1
+α′
+t,τvτ =
+Pt
+τ=1 vτϕ(kτ)⊤ϕ(qt)
+Pt
+τ ′=1 ϕ(kτ ′)⊤ϕ(qt)
+=
+Pt
+τ=1 vτ ⊗ϕ(kτ)
+
+ϕ(qt)
+Pt
+τ ′=1 ϕ(kτ ′)
+⊤
+ϕ(qt)
+(20)
+=
+z⊤
+t ϕ(qt)Wtϕ(qt)
+(21)
+where, in the numerator, Wt is defined as Wt = Pt
+τ=1 vτ ⊗ϕ(kτ) ∈Rdout×dkey whose recurrent update
+function can be derived similarly to Eqs. 16-17, and zt ∈Rdkey in the denominator of Eq. 21 has the following
+recurrent update equation with z0 = 0:
+zt =
+t
+X
+τ ′=1
+ϕ(kτ ′) = zt−1 + ϕ(kt)
+(22)
+Overall, the sequential dynamics of a transformer model based on an alternative normalized attention
+function defined by Eq. 19 can be rewritten as:
+qt = W Qxt ; kt = W Kxt ; vt = W V xt
+(7)
+Wt = Wt−1 + vt ⊗ϕ(kt)
+(13)
+zt = zt−1 + ϕ(kt)
+(22)
+yt =
+z⊤
+t ϕ(qt)Wtϕ(qt)
+(21)
+This is the “recurrent form” of the so-called “linear transformer” (Katharopoulos et al., 2020). This system is
+identical to the FWP of Sec. 3.1 up to the normalizing denominator z⊤
+t ϕ(qt) ∈R in Eq. 21 and tracking of
+the extra time-varying variable zt (Eq. 22). From this view, the vanilla FWP is essentially an “unnormalized
+linear transformer” (ULTRA). In fact, recent work extending linear transformer models (discussed in Sec. 3.4)
+has shown that such normalization is unnecessary in practice (Schlag et al., 2021a; Sun et al., 2023; Yang
+et al., 2024a;b).
+While “linear” in the name “linear transformer” could highlight how the linearized attention function of
+Eq. 19 allows for its computation to be reorganized unlike the softmax attention, it primarily refers to its
+time complexity. Unlike the quadratic complexity of the softmax attention (Sec. 2.3), the computation
+per step is constant w.r.t. the time step/sequence length in this model; the resulting time complexity is
+linear w.r.t. sequence length like with RNNs. This is an example of efficient sequence models as its training
+is parallelizable using the “attention form”—parallel computation analogous to that of softmax attention
+(Eq. 12) can be derived, while its inference is linear-time complexity by using the recurrent form above.
+Naturally, such a computational advantage comes with a cost: performance of the linear transformer largely
+lags behind that of the quadratic transformer in practice (Katharopoulos et al., 2020; Schlag et al., 2021a).
+However, as we’ll see in the next Sec. 3.4, more effective but still efficient models can be derived by extending
+the vanilla FWP model.
+As a side note, while the original linear transformer by Katharopoulos et al. (2020) simply used ϕ(x) =
+ELU(x) + 1 (where ELU denotes “exponential linear unit” (Clevert et al., 2016)), both Choromanski et al.
+(2021) and Peng et al. (2021) proposed a linear transformer that uses random feature kernels (i.e., ϕ is not
+just a judiciously chosen activation function but also involves up-projection using randomly sampled features)
+which are formal approximations of the softmax in theory. However, such approximation methods (which
+hold with infinite many random features) do not perform well in practical scenarios.
+As a historical note, while the derivation of the recurrent form of the linear transformer from its attention
+form was provided by Katharopoulos et al. (2020) (2020), the same mathematical derivation can also be
+found in Ba et al. (2016a) (2016) which connected a special instantiation of recurrent FWPs (Schmidhuber,
+1993b) (in which a recurrent hidden state is used as both keys and values) to a form of attention. More
+broadly speaking, the mathematical derivation relating the vanilla FWP to unnormalized attention is the
+Published in Transactions on Machine Learning Research (12/2025)
+Table 1: A few variations of Fast Weight Programmers with the corresponding update rules and underlying
+local (minimized) objective functions. Wt, Wt−1, and W are matrices; vt and kt are vectors, at is a vector
+with elements in (0, 1); 1 denotes a vector whose elements are all one; λ and λt are scalars in (0, 1); ηt is a
+non-negative scalar serving as a learning rate in the update rule (the update rules that do not involve ηt
+use a learning rate of 1). ⊗and ⊙denote outer product and element-wise/Hadamard product, respectively.
+Derivations can be found in Appendix A.
+Model
+State Update Rule
+Local Loss Lt(W )
+Vanilla FWP
+Wt = Wt−1 + vt ⊗ϕ(kt)
+−v⊤
+t W ϕ(kt)
+Use Classic Rule
+DeltaNet (Schlag et al., 2021a)
+Wt = Wt−1 + ηt(vt −Wt−1ϕ(kt)) ⊗ϕ(kt)
+2 ||vt −W ϕ(kt)||2
+OjaNet (Irie et al., 2022b)
+Wt = Wt−1 + ηtvt ⊗(ϕ(kt) −W ⊤
+t−1vt)
+−v⊤
+t W ϕ(kt) + 1
+2 ||W ⊤vt||2
+Introduce Decaying
+RetNet Sun et al. (2023)
+Wt = λWt−1 + vt ⊗ϕ(kt)
+−v⊤
+t W ϕ(kt) + 1−λ
+||W ||2
+F
+Mamba2 (Dao and Gu, 2024)
+Wt = λtWt−1 + vt ⊗ϕ(kt)
+−v⊤
+t W ϕ(kt) + 1−λt
+||W ||2
+F
+Gated RFA (Peng et al., 2021)
+Wt = λtWt−1 + (1 −λt)vt ⊗ϕ(kt)
+−(1 −λt)v⊤
+t W ϕ(kt) + 1−λt
+||W ||2
+F
+mLSTM in xLSTM (Beck et al., 2024) Wt = λtWt−1 + ηtvt ⊗ϕ(kt)
+−ηtv⊤
+t W ϕ(kt) + 1−λt
+||W ||2
+F
+GLA (Yang et al., 2024a)
+Wt = (at ⊗1) ⊙Wt−1 + vt ⊗ϕ(kt)
+−v⊤
+t W ϕ(kt) + 1
+2 ||((√1 −at) ⊗1) ⊙W ||2
+F
+Combine Methods
+Gated DeltaNet (Yang et al., 2025)
+Wt = λtWt−1 + ηt(vt −Wt−1ϕ(kt)) ⊗ϕ(kt)
+2 ||vt −W ϕ(kt)||2
+2 + 1−λt
+2ηt ||W ||2
+F
+same as the classic derivation in ML that derives the duality between the perception and its dual form, kernel
+machines by Aizerman et al. (1964) (1964); based on this parallel, the vanilla FWP computation is the primal
+form, and (unnormalized) attention is its dual form (Irie et al., 2022a).
+A practical implication of this equivalence is that FWPs are typically used as a drop-in replacement to the
+self-attention operation in the transformer architectures, while preserving other transformer components,
+including two-layer feedforward blocks, layer normalization, residual connections, as well as the use of multiple
+heads (Vaswani et al., 2017).
+3.4
+Going beyond the vanilla FWP: exploring fast weight update rules
+A core characteristics of FWPs—the use of an update rule that has a form of a learning rule in the forward
+dynamics of the system to train a subnetwork on the fly—naturally motivates us to explore and improve the
+update rule used in Eq. 13.
+For example, one idea is to replace the purely Hebbian-like learning rule of Eq. 13 by the error-correcting
+delta-rule (Widrow and Hoff, 1960). This yields the following model, called “DeltaNet” (Schlag et al., 2021a):
+qt = W Qxt ; kt = W Kxt ; vt = W V xt ; βt = wb⊤xt
+(23)
+Wt = Wt−1 + ψ(βt)(vt −Wt−1ϕ(kt)) ⊗ϕ(kt)
+(24)
+yt = Wtϕ(qt)
+(14)
+where in addition to the query/key/value generated by the slow net in Eq. 23, an extra trainable parameter
+vector wb ∈Rdin is introduced to generate a scalar variable βt ∈R, which will serve as a dynamic learning
+rate (in the multi-head case, different learning rates are generated for each head); in Eq. 24, ψ is typically
+set to 2 times the sigmoid function (the factor 2 is crucial to introduce negative eigenvalues in the state
+transition matrix enabling improved expressivity (Grazzi et al., 2025); we discuss in Sec. 3.6).
+Eq. 24 corresponds to a rank-one update of the fast weight matrix, from Wt−1 to Wt, through the delta
+learning rule (Widrow and Hoff, 1960), where the slow net-generated variables, vt, ϕ(kt), and ψ(βt), play the
+role of target, input, and learning rate of the delta rule, respectively. See Box 3 for further comments on the
+delta rule.
+From the memory system perspective (Schlag et al., 2021a), this update rule can also be interpreted as follows:
+instead of naively adding the new key-value association (kt, vt) to be stored in memory (as is the case for the
+purely additive rule of Eq. 13), we first check the old value that is currently associated to the new key kt by
+querying the current memory matrix Wt−1ϕ(kt); which we remove from the memory, while adding the new
+value vt. The effective residual value vector to be added to the memory is their “delta”, i.e., vt −Wt−1ϕ(kt).
+Published in Transactions on Machine Learning Research (12/2025)
+In practice, DeltaNet has been shown to consistently outperform the vanilla FWP with the purely additive
+update rule (Sec. 3.1) across many tasks including language modeling (Schlag et al., 2021a; Irie et al., 2021;
+Yang et al., 2024b), reinforcement learning in game environments (Irie et al., 2021), time series classification
+(Irie et al., 2022b), and image generation (Irie and Schmidhuber, 2023). One natural question is whether
+DeltaNet is still efficient, i.e., whether its training is parallelizable, and the answer is yes; Yang et al. (2024b)
+have derived a parallel training algorithm for DeltaNet.
+More broadly, many recently proposed efficient sequence models—such as Gated Linear Attention (GLA)
+(Yang et al., 2024a), Mamba2 (Dao and Gu, 2024), RetNet (Sun et al., 2023), mLSTM in xLSTM (Beck
+et al., 2024), and Gated DeltaNet (Yang et al., 2025)—can also be expressed as an FWP with a specific
+state/weight update rule; the corresponding summary is shown in Table 1. This FWP view facilitates relating
+and comparing these models—relations which may be nebulous solely from their names. For example, we
+can categorize that many of these models simply introduce a decay factor on the weight/state and differ
+from each other in the type of decay used: RetNet uses a constant scalar decay, whereas Mamba2 uses a
+context/time-dependent scalar (produced as a function of the input; similarly to the dynamic learning rate of
+DeltaNet in Eq. 23), while GLA dynamically produces different decay rates for each row of the fast weight
+matrix. Oja’s rule (Oja, 1982) is also a natural extension to the naive Hebbian rule; however, OjaNet was
+reported to empirically underperform DeltaNet on certain sequence processing applications (Irie et al., 2022b);
+which may be an intuitive result as Oja’s rule performs principal component analysis (Oja, 1982), while the
+delta rule is for error correction. Certain other rules can be naturally derived as extensions of the delta rule
+(Yang et al., 2025; Peng et al., 2025). Further discussions of local objectives underlying different update rules
+are provided in the next section and in Table 1.
+As a side note, some of the early FWP-like models whose development predates 2020 (Schlag and Schmidhuber,
+2017; Munkhdalai and Yu, 2017; Munkhdalai and Trischler, 2018; Miconi et al., 2018; 2019; Keller et al.,
+2018; Munkhdalai et al., 2019) (at the time when sequence model development was much less dominated by
+the training efficiency; we remind that the GPT-2 (Radford et al., 2019) and GPT-3 (Brown et al., 2020)
+language models were introduced in 2019 and 2020, respectively), are somewhat harder to fit in this table, as
+they tended to use fast weights within the LSTM architecture; but we can find the same core idea: replacing
+certain weight matrices in the LSTM by fast weights modified over time through an update rule.
+Practical considerations.
+To determining the to-go model for a specific task, our current recommendation
+is to try both DeltaNet and Gated DeltaNet variants (Table 1): while Gated DeltaNet has been reported to
+outperform DeltaNet on language modeling tasks, consistency of this advantage in other tasks has not been
+confirmed yet (e.g., for reinforcement learning in certain game environments, we found weight/memory decay
+of the gated variant to hurt; unpublished work). Our general recommendation is to avoid relying solely on
+existing language modeling results when applying FWPs as general-purpose sequence models to other tasks.
+As for practical considerations, the choice of ϕ (applied to key and query vectors) has a direct impact on both
+good performance and stability (especially when the delta rule is used (Schlag et al., 2021a)). Our current
+recommendation is to set ϕ to be the element-wise sigmoid linear unit (SiLU = x ⊙sigmoid(x)) followed
+by the L2 normalization as proposed by Yang et al. (2024b). Further discussion on the practical training
+algorithm can be found in Box 1.
+Efficient implementations for most models listed in Table 1 are openly available on the actively maintained
+“flash-linear-attention” repository (Yang and Zhang, 2024); using these models are typically as easy as using
+an LSTM in PyTorch, and could be a good starting point for any other FWP model development.
+Box 1: Chunk-wise Parallel Training Algorithm for FWPs
+In practice, the FWP models discussed here are trained using a so-called “chunk-wise paral-
+lel training” algorithm, which is a hybrid approach leveraging both the recurrent and attention form of
+FWPs (Hua et al., 2022; Sun et al., 2023; Yang et al., 2024a). While the exact algorithm is derived
+for each FWP model, the main idea is to divide a training sequence into small chunks and causally
+Published in Transactions on Machine Learning Research (12/2025)
+Figure 2: An Illustration constrasting a: a conventional view on sequence model with a learning algorithm,
+and b: a metalearned (or in-context learning) system that embeds learning algorithms/dynamics within its
+sequential dynamics. In a, the sequence model only observes an input, and produces an output (black),
+while the learning algorithm receives the expected target and the model output, and takes care of adjusting
+the parameters of the sequence model to improve upon the given task (gray). In contrast, in b, the system
+itself observes the input and the (delayed) expected target, and self-improvement on the task, i.e., learning, is
+part of its sequential dynamics.
+process one chunk after another; the intra-chunk computation leverages the parallel computation,
+while the inter-chunk contributions are computed using the recurrent form.
+Here we illustrate the main idea by focusing on the algorithm for the vanilla FWP with ϕ set to
+identity. Let S and n denote positive integers. We denote all the model outputs in the n-th chunk of
+size S as Yn ∈Rdout×S, which can be computed as:
+Yn = WnQn + Vn(K⊤
+n Qn ⊙M) ;
+Wn+1 = Wn + VnK⊤
+n
+(25)
+where Qn, Kn ∈Rdkey×S and Vn ∈Rdout×S denote matrices containing all the query, key, value vectors
+for chunk n, respectively, and Wn ∈Rdout×dkey is the state of the fast weight matrix after observing all
+the inputs from the beginning of the sequence up to chunk n (exclusive), with W0 = 0, and M ∈RS×S
+is the causal mask. In Eq. 25, the first and second terms of the left equation correspond to the inter-
+and intra-chunk computations, respectively, while the right equation is the chunk-level fast weight
+update.
+Analogous algorithms can be rather straightforwardly derived for all the FWPs based on weight decays
+(see Table 1). While non trivial, an algorithm for DeltaNet can also be derived (Yang et al., 2024b)
+and scales well in practice. Actual implementations for different models can be found, e.g., in the
+open-source code available at the flash-linear-attention repository (Yang and Zhang, 2024).
+3.5
+Local online learning, metalearning, and conception of in-context learning
+The concept and structure of FWPs also offer unique insights into the idea of local online learning and
+metalearning, with implications for research on learning mechanisms compatible with biological constraints.
+Local online learning.
+The structure of FWPs captures the fundamental idea of expressing the learning
+dynamics, i.e., the process of “training a network”, within the model’s sequential dynamics (Cotter and
+Conwell, 1990; 1991; Younger et al., 1999; 2001; Hochreiter et al., 2001b)—a slow net learns to “train” a
+fast net as a part of sequence processing. This view is further reinforced in the case of DeltaNet in which
+the classic delta rule—conventionally used in the “backward pass”, i.e., in the process of learning the (slow)
+weights of an ML system—is used in the “forward pass” to perform online updates of the fast weights based
+Published in Transactions on Machine Learning Research (12/2025)
+on the variables (input/target/learning rate) produced by the slow net on the fly; essentially performing a
+local online training of the fast net.
+This local optimization aspect becomes even more prominent by explicitly writing down the local objective
+function that is optimized by the corresponding update rule. For example, the classic delta rule (Eq. 24)
+corresponds to the derivative (w.r.t. the fast net weights Wt) of the squared loss ||vt −Wtϕ(kt)||2
+2 between
+the “target” vt and the output Wtϕ(kt) that the fast net would produce if ϕ(kt) were fed to its input (which
+is consistent with the idea of binding ϕ(kt) to vt by storing the corresponding key/value pair in the memory
+matrix Wt); see Box 3 for further details. More generally, the update rules used in typical FWP models
+have a corresponding local objective function, as summarized in the last column of Table 1. For example,
+using a state/weight decay in the update rule corresponds to introducing the L2 regularization on the fast
+weight matrix ||W ||2
+F in the local objective function (disregarding constant factors), where the regularization
+strengths are the weight decay factors.
+As a side note, such an idea of an optimized model (the slow net itself is trained/optimized for an external
+objective function, e.g., by gradient descent) that internally optimizes a certain objective function is often
+called “mesa-optimization” (Hubinger et al., 2019) and the corresponding hidden objective is called “mesa-
+objective”. A natural extension of such a view on FWPs has given rise to another class of FWP models, in
+which, instead of defining a single-step update rule, a local objective function is directly defined, and the
+model output is produced by finding the corresponding optimum by using an explicit optimizer. For further
+details, we refer to concrete examples of this model family, such as MesaNet (von Oswald et al., 2025; 2023b)
+and Titan (Behrouz et al., 2024; 2025a) (see also Behrouz et al. (2025b)), as well as the related concepts of
+“test-time training/regression” (Sun et al., 2025; Wang et al., 2025).
+Metalearning.
+The FWP concept of training a model to train another model (or itself) is also the essence of
+metalearning in ML (Schmidhuber, 1987; Chalmers, 1990; Bengio et al., 1991; Hochreiter et al., 2001b). While
+any general-purpose sequence models (including any models discussed in this Primer) can be potentially trained
+to become an online learner through metalearning (as we explain below), the structure of FWPs provides an in-
+tuitive conception: the slow net implements a learning algorithm for the fast net. Remarkably, von Oswald et al.
+(2023a) have effectively derived a specific slow weight configuration for a vanilla FWP to implement the gradient
+descent learning algorithm for regression problems in its forward dynamics (see Box 2 for further details).
+One crucial ingredient for metalearning we have not discussed yet is the “error feedback”. For any sequence
+model to become an online learner (capable of effectively learning new tasks through observations), error
+feedback needs to be provided to the model, in addition to the input observation. There are two common
+ways to do so. One way (which we call the “delayed-feedback” setting following Irie et al. (2022c)) is to
+feed the ground truth target from the previous time step as an additional input to the model (i.e., with
+a one time-step delay); in this case, the model continually receives an input xt and a delayed feedback
+ˆyt−1 and predicts yt at every time step (Hochreiter et al., 2001b; Santoro et al., 2016). Alternatively, in
+the “synchronous-feedback” setting (Mishra et al., 2018), we feed both an input xt and the corresponding
+target yt to the model at every time step as demonstrations of the task; and for an input on which we want
+the model to make a prediction, no target is provided; instead, we replace it with special values that indicate
+it is not a demonstration and that a prediction is being requested.
+In both cases, such formulations turn the problem of learning itself into a sequence learning problem; by
+(meta-)training a sequence model on many such example sequences, each representing a different task (i.e., a
+different learning experience), we can obtain an online learner capable of learning a new task by observing
+some task demonstrations (i.e., pairs of an observation and the expected target from the task).
+While such an online learning capabilities is often called in-context learning (Brown et al., 2020; Garg et al.,
+2022; Raventós et al., 2023) today, and it is often (misleadingly) described as a somewhat magical capability of
+transformer-based large language models (LLMs); by using some metalearning process like the one described
+above, we can meta-train any sequence model to become an online learner involving modalities beyond
+languages. For example, the seminal work by Hochreiter et al. (2001b) trained an LSTM to perform in-context
+regression—demonstrating the “fixed-weight learning” concept advocated by Cotter, Conwel, and Younger
+(Cotter and Conwell, 1990; 1991; Younger et al., 1999) in the early 1990s, while Santoro et al. (2016) and
+Published in Transactions on Machine Learning Research (12/2025)
+Mishra et al. (2018) performed in-context image classification—all predating the term in-context learning.
+There are numerous such examples across tasks, modalities, and model architectures (Bosc, 2015; Santoro
+et al., 2016; Duan et al., 2016; Wang et al., 2017; Munkhdalai and Yu, 2017; Munkhdalai and Trischler,
+2018; Mishra et al., 2018; Miconi et al., 2018; 2019; Munkhdalai et al., 2019; Sandler et al., 2021; Kirsch and
+Schmidhuber, 2021; Huisman et al., 2023), and they are not specific to the transformer architecture or the
+language modality.
+From the metalearning perspective, it is not surprising that LLMs are capable of in-context learning, given
+that the task of auto-regressive next-token prediction—underlying language modeling—precisely follows the
+form required by metalearning: prediction with error feedback (the delayed-feedback version above); and the
+internet-scale text could provide data necessary for such meta-training (Irie and Lake, 2025).
+Box 2: Slow Weight Configuration Implementing Gradient Descent
+Here we review how von Oswald et al. (2023a) constructed a slow weight configuration that
+implements a gradient descent learning algorithm in the forward pass of the vanilla FWP (Sec. 3.1) for
+linear regression problems.
+We consider a regression task with input and output dimensions dx and dy, respectively, and the
+corresponding data set (zt, f(zt)) for zt ∈Rdx and f(zt) ∈Rdy for t from 1 to T with an unknown
+function f.
+Let’s first describe what the gradient descent algorithm would do for linear regression. If we had
+a linear model with a weight matrix W0 ∈Rdy×dx, and performed one step of gradient descent on
+the loss 1
+PT
+t=1 ||f(zt) −W0zt||2
+2, the resulting weight matrix would be W0 + ∆WT with ∆WT =
+PT
+t=1(f(zt) −W0zt) ⊗zt (here we use a learning rate of 1 but the construction can be easily extended
+to the case with an arbitrary learning rate). Given a new input z⋆∈Rdx, prediction of the linear
+model with the updated weight matrix would be (W0 + ∆WT )z⋆, which can be further expressed as
+(W0 + ∆WT )z⋆≈∆WT z⋆for small initialization W0.
+The goal here is to construct a weight configuration of W Q, W K, W V in the vanilla FWP that can
+reproduce the algorithm above, by simply following the FWP equations of Sec. 3.1. This construction
+uses one-layer single-head vanilla FWP model with ϕ function set to identity. The feedback scheme is
+synchronous, that is, we feed to the model a sequence of demonstration vectors xt = [zt, f(zt)] ∈Rdx+dy,
+each is a concatenation of an observation zt ∈Rdx and the ground truth target f(zt) ∈Rdy.
+The proposed weight configuration is the following:
+W Q = W K =
+
+Idx
+0dx×dy
+0dy×dx
+0dy×dy
+
+; W V =
+ 0dx×dx
+0dx×dy
+W0
+−Idy
+
+(26)
+where Idx ∈Rdx×dx and Idy ∈Rdy×dy are identity matrices, 0∗are block matrices filled with zeros
+with the corresponding dimensions ∗, and W0 ∈Rdy×dx. In terms of the notation of Sec. 3.1, we have
+din = dout = dkey = dx + dy. For an input xt = [zt, f(zt)] ∈Rdx+dy, this yields:
+qt = kt =
+
+zt
+0dy×1
+
+; vt =
+
+0dx×1
+W0zt −f(zt)
+
+(27)
+With these key/value vectors, we can easily derive that, at time step t, the corresponding fast weight
+state is:
+Wt = Wt−1 + vt ⊗kt = Wt−1 +
+
+0dx×dx
+0dx×dy
+(W0zt −f(zt)) ⊗zt
+0dy×dy
+
+(28)
+=
+
+0dx×dx
+0dx×dy
+Pt
+τ=1(W0zτ −f(zτ)) ⊗zτ
+0dy×dy
+
+=
+ 0dx×dx
+0dx×dy
+−∆Wt
+0dy×dy
+
+(29)
+Published in Transactions on Machine Learning Research (12/2025)
+where we can already recognize that ∆Wt (in the left bottom block) is the gradients of the squared
+loss using t inputs. The FWP output is:
+yt = Wtqt =
+
+0dx×1
+−∆Wtzt
+
+(30)
+The last dy elements of output yt, which is −∆Wtzt, is the same (up to a negative sign) to the linear
+model predictor trained by gradient descent as described above; a simple linear readout layer (with
+weight vector wout = [0dx×1, −1dy×1]) can easily apply the negative sign and extract this part of yt.
+Overall, at every step t, this FWP implements gradient descent using the corresponding data points
+up to t.
+After having processed T demonstration inputs, to make a prediction on a new z⋆without its target
+f(z⋆); we can set the corresponding “target” part of the model input as x⋆= [z⋆, W0z⋆] to obtain
+wout⊤y⋆= ∆WT z⋆, corresponding to the gradient descent-trained linear predictor.
+Biology-compatible learning.
+The core idea of parameterizing local learning as part of the model’s sequen-
+tial dynamics (see Figure 2)—and metalearning the corresponding in-context learning algorithm—prompts us
+to rethink general research on biologically plausible learning in ANNs (Schmidhuber, 1989; 1990b; Mazzoni
+et al., 1991; O’Reilly, 1996; Bengio et al., 2015; Lillicrap et al., 2016; Pozzi et al., 2018; Najarro and Risi, 2020;
+Boopathy and Fiete, 2022; Hinton, 2022), which has been striving to address the longstanding critique of back-
+propagation in deep ANNs as being incompatible with biology (Crick, 1989; Zipser and Rumelhart, 1990) (e.g.,
+a common critique is that backpropagation uses the transpose of the same weight matrix used in the forward
+pass in the backward pass, raising the “weight transport problem”). While meta-training still uses the biologi-
+cally implausible algorithm (e.g., BPTT), once the model is trained, it becomes capable of in-context learning
+which is a local learning algorithm for which there is no obvious incompatibility with biology at a high level.
+In particular, with FWPs in mind, one potentially fruitful view is, instead of drawing a parallel between the
+BPTT-based learning of slow weights with learning in the brain, we could introduce another time scale, and
+draw a parallel between local learning of fast weights with learning in the brain, and learning of slow weights
+could be analogous to evolution that has shaped our molecular mechanism and ability to learn (in fact, in
+lieu of BPTT, evolution strategy algorithms have also been used to train the slow weights of FWPs (Gomez
+and Schmidhuber, 2005); see also Chalmers (1990)).
+As a side note, learning in ANNs has also received numerous critiques from cognitive scientists, who pointed
+out shortcomings such as the inability to learn from a few examples, to learn compositionally (Fodor and
+Pylyshyn, 1988), or to learn continually (McCloskey and Cohen, 1989). A recent series of work (Santoro et al.,
+2016; Lake and Baroni, 2023; Irie et al., 2025a) has addressed these classic challenges altogether through a
+common framework of metalearning and in-context learning (Irie and Lake, 2025).
+3.6
+Expressivity of the FWP models
+In addition to the computational complexity, expressivity is a critical property to compare and categorize
+various types of sequence models in ML. Expressivity is about determining what types of computation the
+model can perform, which is a fundamental question in computer science, and is arguably also important
+in modeling cognitive abilities in psychology. One common misconception is that, given all the universal
+approximation and Turing completeness results available for these ANNs/RNNs (Siegelmann and Sontag,
+1991; Pérez et al., 2019; Pérez et al., 2021; Orvieto et al., 2024), they are all equally powerful. This is
+not the case for practical models with finite resources; different sequence models differ in their “practical
+computational ability” (Weiss et al., 2018) and in the type of tasks they can solve.
+Tools to evaluate expressivity.
+Expressivity is often evaluated through formal language recognition tasks
+(Giles et al., 1989; Pollack, 1988; Gers and Schmidhuber, 2001; Schmidhuber et al., 2001; Weiss et al., 2018;
+Hahn, 2020; Merrill et al., 2020; Bhattamishra et al., 2020; Delétang et al., 2023; Irie et al., 2023; Merrill and
+Sabharwal, 2023; Strobl et al., 2024; Merrill et al., 2024; Beck et al., 2024). Formal languages are convenient
+Published in Transactions on Machine Learning Research (12/2025)
+tools here because they provide us with a diverse set of tasks that require different types of sequence and
+memory processing abilities derived from the Chomsky hierarchy (Chomsky, 1956; Hopcroft and Ullman,
+1969). For example, parity (given a sequence of 0s and 1s, the task of determining whether the number of 1s
+is odd) or modular arithmetic (addition and multiplication of integers modulo some integer) tasks can be
+represented as “regular languages” which require state-tracking ability to solve the task (Grazzi et al., 2025;
+Merrill et al., 2024; Sarrof et al., 2024), while certain “context-free” or “context-sensitive” grammars, such
+as the tasks of recognizing that a given sequence follows a pattern of anbn or anbncn, can evaluate models’
+ability to count (Bhattamishra et al., 2020).
+However, one important remark here is that the Chomsky hierarchy, which classifies theoretical models of
+computation, does not strictly capture the expressivity hierarchy of practical neural networks—the inability to
+solve certain regular language tasks does not imply a systematic failure on context-free grammar tasks, even
+though they are “stronger” than the regular languages in the Chomsky hierarchy. For example, this is exactly
+the case for the transformer: it either completely fails or struggles with certain regular languages, but their
+performance is excellent for both context-free and context-sensitive counting tasks (Bhattamishra et al., 2020).
+Expressivity of FWPs.
+The FWP models in Table 1 differ in their expressive power. For this comparison,
+let’s assume dout = din = d, and regroup terms in the update rule equations that involve the current state
+Wt−1, to obtain a canonical SSM-like form:
+Wt = BtWt−1At + Ct
+(31)
+for arbitrary matrices At, Bt, Ct ∈Rd×d that have no dependency on variables from the previous time step
+t −1, where At and Bt are the “state transition matrices”. For example, by denoting the identity matrix as
+I ∈Rd×d, the update rule of DeltaNet (see Eq. 24) can be rewritten as:
+Wt = Wt−1 + ψ(βt)(vt −Wt−1ϕ(kt)) ⊗ϕ(kt)
+(24)
+= Wt−1
+ I −ψ(βt)ϕ(kt) ⊗ϕ(kt)
+
++ ψ(βt)vt ⊗ϕ(kt)
+(32)
+that is, At =
+ I −ψ(βt)ϕ(kt) ⊗ϕ(kt)
+
+for DeltaNet, which, as pointed out by Yang et al. (2024b), is a
+generalized Householder matrix (in Box 3, we provides an overview of the useful facts about the delta rule
+discussed in this work); and Bt = I.
+More generally, the canonical form of Eq. 31 can tell a lot about the expressive power of the model by looking
+at the form that At and Bt take, because it is the state transition matrices which dictate the type of state
+transition the model can perform. The expressivity of models is limited when both At and Bt are reduced to
+an identity matrix (as is the case for the vanilla FWP; At = Bt = I) or a diagonal matrix—whether all the
+diagonal values are the same (e.g., in RetNet, Mamba2, and mLSTM, At = λI or At = λtI) or different
+as in GLA (At = at ⊗1 = Diag(at)), akin to element-wise recurrence (Sec. 2.2); see Table 1. For example,
+these diagonal state-transition-based models fail at recognizing certain regular languages such as parity and
+modular arithmetic, while DeltaNet models can handle such state-tracking tasks (Grazzi et al., 2025).
+While earlier work on expressivity analysis of FWPs has been mostly empirical (Irie et al., 2021; 2023), there
+has been increasingly more work that aims to analyze and improve FWPs through the theoretical angle
+(see, e.g., Merrill et al. (2024); Sarrof et al. (2024); Muca Cirone et al. (2024); Movahedi et al. (2025)), in
+particular, Siems et al. (2025) introduced “DeltaProduct” which extends DeltaNet by using more than one
+application of the delta rule per time step, yielding At with a product of Householder matrices, achieving an
+improved expressivity in the resulting model.
+In machine learning, the current challenge is to improve the expressivity and the general model performance,
+while maintaining the efficiency of sequence models (Yau et al., 2025). As a counterexample, introducing
+extra recurrence (by feeding back the output of fast net to the input of the slow net in the next time step
+(Irie et al., 2021)) or self-reference (by merging the slow and fast nets into a single network that modifies
+itself (Schmidhuber, 1992a; 1993a; Irie et al., 2022c)) can further improve the expressivity of FWPs, but
+it makes the models’ training inefficient. However, more exploratory model developments by ignoring the
+requirement for efficient parallel training—which is desired solely from the machine learning standpoint, in
+principle—may also be fruitful for computational modeling in neuroscience.
+Published in Transactions on Machine Learning Research (12/2025)
+Table 2: Complementarity of memory systems in machine learning. Reproduced from Irie et al. (2025b)
+Property
+Transformer
+Fast weight programmer
+Complexity
+quadratic
+linear
+Context length
+bounded
+unbounded
+Retrieval precision
+high
+low
+Expressivity
+low
+high (with certain update rules)
+3.7
+Complementarity of memory systems
+While recent developments of FWPs have produced efficient sequence models that are both more efficient and
+more expressive than the standard transformer—and competitive in practice on average across many language
+tasks (Yang et al., 2025; Siems et al., 2025; von Oswald et al., 2025)—the transformer still outperforms FWPs
+on precise retrieval tasks by a large margin (Irie et al., 2025b), suggesting the raison d’être of softmax attention.
+Their overall complementarity is summarized in Table 2. It remains an open question whether FWP models
+can be further improved to match the retrieval quality of standard transformers. For now, an engineering
+solution to achieve the best of both worlds is to combine the two in a hybrid architecture (Beck et al., 2024;
+Yang et al., 2025), which is reminiscent of the classic “complementary learning systems” (McClelland et al.,
+1995; O’Reilly and Norman, 2002) in which two complementary systems are allocated to collectively achieve
+incompatible goals that are unattainable by each individual system, through division of labor.
+Box 3: Key facts and intuitions about the delta rule
+Here we briefly summarize three useful facts about the delta rule.
+1. Gradient descent on the squared error regression loss. The delta rule equation can be
+derived from the following regression problem. Consider a function Rdin →Rdout parameterized by
+a matrix W ∈Rdout×din, that transforms an arbitrary input x ∈Rdin to output f(W x) ∈Rdout
+where f is an arbitrary differentiable function Rdout →Rdout. Given a data point with input x ∈Rdin
+and target ˆy ∈Rdout to which we want to fit this function, we can minimize the squared error
+E(W ) = 1
+2||ˆy −f(W x)||2
+2 between the model output and the target, using gradient descent.
+The corresponding gradient is:
+∂E
+∂W = −
+ f ′(W x) ⊙(ˆy −f(W x)
+
+⊗x, which yields the following
+update term to be added to W when one step of gradient descent is applied with a learning rate η:
+∆W = −η ∂E
+∂W = η
+ f ′(W x) ⊙(ˆy −f(W x))
+
+⊗x. In the case where the model is a simple linear
+layer, i.e., when f is identity, this term becomes: ∆W = η(ˆy −W x) ⊗x, which corresponds to the
+delta rule used in DeltaNet, where the key ϕ(kt) and value vt which play the role of input and target,
+respectively, and the learning rate ηt, are dynamically generated.
+2. Improved update rule for a “key-value associative memory” system. The delta rule can
+be seen as an improved update rule for a “key-value associative memory” system. Recall that a linear
+layer with an outer-product weight update rule can implement such a memory system—corresponding
+to Kohonen’s correlation matrix memories (Kohonen, 1972) (in fact, Kohonen used the “key-data”
+terminology instead of “key-value”). Generally, the defining components of a memory architecture
+are its storage and the associated reading/writing primitives. In the case of a linear layer system, its
+weight matrix serves as the storage. The reading operation is the multiplication between a query input
+q, and the memory matrix W : y = W q. A basic writing operation based on outer-product which
+adds a key-value association (k, v) to the memory is: Wt = Wt−1 + v ⊗k. As an illustration, we
+consider 3-dimensional keys and 2-dimensional values. Given an empty memory W0 = 02×3 ∈R2×3, a
+key-value association, with an arbitrary value vector v ∈R2, and the key k = [0, 1, 0]⊤∈R3 (which
+is a one-hot vector), can be stored to the memory by adding the corresponding outer-product to
+W0: W1 = W0 + v ⊗k = [02×1; v; 02×1]. We can retrieve the corresponding value by using the
+Published in Transactions on Machine Learning Research (12/2025)
+corresponding key as the query q = [0, 1, 0]⊤for memory reading: W1q = v. However, when the same
+association (k, v) is presented again to the system, the updated memory state becomes W2 = [0; 2v; 0],
+which breaks the (k, v)-association (the wrongly stored association is (k, 2v)), as this naive additive
+rule does not check the current memory content. In contrast, the delta rule preserves the memory state
+in that case, as it only writes the “delta”, i.e., the difference between the target value to be stored and
+the current value associated to the key.
+3. Improved transition matrix in linear RNNs. Finally, as discussed in Sec. 3.6, the effect of the
+delta rule can also be understood in terms of a transition matrix in a linear RNN. The state transition
+matrix of the FWP with the purely additive rule is the identity matrix. In contrast, the delta rule
+introduces a state update term that is dependent on the current memory state; this yields a more
+expressive, non-diagonal transition matrix (Eq. 32).
+Glossary (Neuroscience)
+• Ion channel: A protein that forms a pore in the cell membrane, allowing specific ions (e.g., sodium
+Na+ or calcium Ca2+) to pass through. Ion channels are crucial for generating and transmitting
+electrical signals in neurons.
+• AMPA receptor: (α-amino-3-hydroxy-5-methyl-4-isoxazolepropionic acid receptor) A membrane
+protein (ionotropic glutamate receptor) that forms a glutamate-gated ion channel whose permeability
+depends on its subunit composition: receptors that include the GluA2 subunit are impermeable to
+Ca2+, while those lacking GluA2 allow Ca2+ entry. It opens rapidly and mediates fast excitatory
+transmission, contributing to synaptic plasticity.
+• NMDA receptor: (N-methyl-D-aspartate receptor) A membrane protein (ionotropic glutamate
+receptor) that forms a glutamate- and voltage-gated ion channel permeable to Na+, K+, and Ca2+. It
+requires depolarization to relieve a Mg2+ block before opening; while Na+ and potassium (K+) also
+pass, the Ca2+ influx is the principal signal that initiates synaptic plasticity.
+• Glutamate: A small amino acid neurotransmitter that binds to receptors such as AMPA and NMDA,
+activating ion channels that mediate excitatory signaling and synaptic plasticity.
+• Phosphorylation: An addition of a phosphate group to a protein or other molecule, typically by an
+enzyme called a kinase. Phosphorylation can alter a protein’s activity, interactions, or localization.
+• Post-translational modification: A chemical change to a protein after it is synthesized, such as
+phosphorylation. These modifications regulate protein function, stability, and signaling.
+Neurobiology
+Here we discuss how FWPs might be implemented in the brain (Sec. 4.1). This is necessarily speculative,
+though we will support our assertions with available evidence. In Sec. 4.2, we more broadly highlight
+properties of FWPs that are relevant as a synaptic plasticity model for neuroscience. Our hope is that these
+ideas will inspire new directions in the study of synaptic plasticity.
+4.1
+A neurobiological implementation of fast weight programming
+To simplify the exposition, we will drop the time index and focus on the special case where the keys and
+queries are the same, and the values have a direct relation to the queries (as we specify below); thus, we
+have q = k. We consider a “postsynaptic” population of neurons that receive “presynaptic” input q and
+generate firing rates y. The presynaptic neurons receive input from a sensory representation x, which we
+leave implicit here. As in many models of neural activity, we will assume that the postsynaptic firing rate
+can be approximated by a linear combination of presynaptic inputs, yj = P
+i Wjiqi.
+The synaptic strengths evolve according to a generalized Hebbian learning rule, where strength increases due
+to the coincidence of presynaptic firing and a postsynaptic activity trace:
+∆Wji ∝vjki,
+(33)
+Published in Transactions on Machine Learning Research (12/2025)
+where ki = qi is the firing rate of presynaptic neuron i, and vj is an “activity trace” encoded by postsynaptic
+neuron j, which we assign to the accumulated postsynaptic calcium level. We model the calcium trace as a
+linear combination of the presynaptic inputs, vj = P
+i Ujiqi (though in reality the relationship is nonlinear
+due to the voltage-dependence of calcium conductance; e.g., we can possibly introduce some non-linear
+activation function on v). This is equivalent to the FWP setup with W V = UW Q and W Q = W K.
+We hypothesize that the synaptic strength matrix W corresponds to the density/conductance of AMPA
+receptors, while the matrix U governing the calcium response corresponds to the density/conductance of
+NMDA receptors. This distinction is motivated by several facts. First, firing rates are primarily governed by
+sodium channels linked to AMPA receptors, whereas intracellular calcium levels are primarily governed by
+calcium channels linked to NMDA receptors. Second, AMPA receptor plasticity can be induced quickly (on
+the order of seconds (Gustafsson et al., 1989)) by Hebbian stimulation protocols—fast enough to contribute
+to performance (at least in principle) on working memory tasks (Erickson et al., 2010; Lansner et al., 2023).
+In contrast, induction of NMDA receptor plasticity is typically slower (Hunt and Castillo, 2012). These two
+forms of plasticity can also be induced independently. Third, AMPA receptor plasticity critically depends on
+calcium influx, which activates a cascade of protein synthesis and post-translational modification. This is
+consistent with the dependence of fast weight modification on vj, the putative calcium trace. In particular, the
+fastest change induced by Hebbian stimulation is the phosphorylation of AMPA receptors by calcium-activated
+kinases like PKA and CaMKII (Lee et al., 2000; Soderling and Derkach, 2000).
+The generalizations of the vanilla FWP architecture (discussed in Sec. 3.4) suggest further nuances to this
+picture. For example, DeltaNet uses vj −P
+i Wjiqi in place of vj in the Hebbian update. A possible biological
+interpretation is that recent neural activity sets a plasticity threshold on postsynaptic calcium, reversing the
+direction of plasticity when calcium levels are below the threshold. Indeed, this is a venerable idea in models
+of synaptic plasticity (Shouval et al., 2002; Graupner and Brunel, 2012).
+Another generalization discussed in Sec. 3.4 (see also Table 1) is the use of various forms of decay on the
+weights and/or states. For example, RetNet assumes scalar decay of all fast weights. This is broadly consistent
+with the observation that changes to synaptic strength continuously decay due to a variety of processes
+(e.g., molecular turnover, diffusion of synaptic components, stochastic kinase/phosphatase activity). Decay
+is also controlled by homeostatic processes that seek to keep neural activity near a set point (Turrigiano,
+2008). Mamba2 assumes that decay is input-dependent, which is broadly consistent with the role of activity-
+dependent mechanisms in determining the decay rate of synaptic plasticity (Abraham and Williams, 2003).
+In particular, protein synthesis triggered by calcium influx plays a central role in the conversion of short-term
+synaptic changes (e.g., AMPA receptor phosphorylation) to long-term changes (trafficking of new AMPA
+receptors to the postsynaptic membrane). GLA further extends this input-dependent decay by modeling
+separate decay rates for each postsynaptic neuron.
+The idea that synaptic plasticity plays out at multiple timescales through several different mechanisms
+has become widely accepted (Citri and Malenka, 2008), including some mechanisms (such as short-term
+depression and facilitation) that are even faster than the fast Hebbian plasticity described earlier (Zador and
+Dobrunz, 1997). Our goal in this section was to link a subset of these mechanisms to the computational ideas
+underlying FWP systems. This leaves fertile ground for future exploration of other potential links, including
+transformer-like computation in the brain (Ellwood, 2024; Whittington et al., 2022; 2025; Kozachkov et al.,
+2023; Gershman et al., 2025).
+4.2
+Other prospects and considerations for neuroscience
+More broadly, the base FWP equation presented here (Eqs. 13-14) may be extended (or restricted) to
+accommodate certain neurobiological aspects that are not supported by the conventional computational
+models in neuroscience. In particular, the following properties are prominent.
+First, FWPs could implement a quite broad class of synaptic modifications (Magee and Grienberger, 2020),
+including both Hebbian and non-Hebbian ones, by conceiving extensions in which the key, value, and query
+representations come from independent sources (i.e., they do not all have to be a function of the shared
+input xt) or even from different time steps. In particular, FWPs can naturally support non-Hebbian learning,
+where the synaptic weight modification does not depend on the postsynaptic firings. For example, behavioral
+Published in Transactions on Machine Learning Research (12/2025)
+timescale synaptic plasticity (BTSP; Bittner et al. (2017); Wu and Maass (2025)) in the hippocampus of
+mammals is well known to be non-Hebbian (i.e., it does not depend on the input-output correlation). BTSP
+involves different sub-regions of the hippocampus, CA1 and CA3, and a part of entorhinal cortex called EC3.
+Their functional relationship can be parameterized as an FWP, in which the fast network maps input CA3
+activities (query qt) to output CA1 activations (output yt), whose synaptic weights are modulated by CA3
+(key kt) and gated by EC3 (value vt)—note that an outer product, like other products, can implement a gate.
+The FWP framework also supports the cases where either or both the slow or fast networks in such a system
+employ recurrent connectivity (Irie et al., 2021). In contrast, to implement Hebbian learning, FWPs may use
+variables from previous time steps as keys and values (as is done in certain recurrent FWPs (Schmidhuber,
+1993b)). Overall, the FWP framework provides a unified formalism for modeling synaptic plasticity across
+types and timescales, which can facilitate the development of computational models in neuroscientific studies
+(cf., e.g., Aitken and Mihalas (2023)).
+Second, unlike traditional auto-associative memory models (Anderson, 1970; Amari, 1972; Nakano, 1972) in
+neuroscience which focus on retrieval of clean patterns based on partially corrupted patterns (Amari, 1972;
+Hopfield, 1982) (see also Kanerva (1988); Millidge et al. (2022)), FWPs implement flexible hetero-associative
+memory, which is functionally more general (Kohonen, 1972; Steinbuch, 1961); as long as the query-key
+matching function is discriminative enough, it allows to store arbitrary key-value associations, regardless of
+whether the value is a denoised version of the key (for auto-association) or any other arbitrary patterns.
+Finally, the current form of FWPs designed for machine learning purposes could be extended to include
+additional properties that are currently missing from a neurobiological perspective, such as stochasticity or the
+time window for plasticity—an important characteristic that distinguishes different types of synaptic plasticity.
+We hope this Primer provides a solid foundation that inspires future exploration of such potential extensions.
+Conclusion
+The main goal of this Primer was to introduce the concept of fast weight programmers (FWPs)—a special
+class of recurrent neural networks (RNNs) with two-dimensional hidden states—at the nexus of machine
+learning and computational neuroscience.
+We have highlighted unique properties of FWPs that are relevant from various perspectives in these fields. We
+have argued that the use of dynamically changing synaptic weights as a form of short-term memory offers a
+compelling abstract computational model for synaptic plasticity, capturing timescales that traditional RNNs
+with static weights cannot. In machine learning, such sequential dynamics have been playing a central role in
+developing modern sequence models, as they allow for both sequence-level parallelism—crucial for efficient
+training, and therefore, scalability—and more expressive computations than those supported by the now
+popular transformer. Furthermore, the ability of FWPs to intuitively express local learning—that is, learning
+that only involves locally available variables—within their own sequential dynamics through weight/state
+update rules provides a novel perspective and a promising framework for learning mechanisms compatible
+with biological constraints.
+Finally, we have also explored a neurobiological implementation of FWP-like computations in the brain, and
+broadly discussed the FWP concept as a general and promising framework that supports various types of
+synaptic plasticity rules that are known in neuroscience, including both Hebbian and non-Hebbian rules.
+While highly speculative and preliminary, we hope this work opens new avenues for modeling synaptic
+modulation and for discussing their roles in learning and memory in the brain.
+Acknowledgments
+The authors are grateful for support from the Kempner Institute for the Study of Natural and Artificial
+Intelligence, a Polymath Award from Schmidt Sciences, and the Department of Defense MURI program under
+ARO grant W911NF-23-1-0277. Kazuki Irie thanks Imanol Schlag and Jürgen Schmidhuber for introducing
+him to the world of fast weights, while at the Swiss AI lab IDSIA.
+Published in Transactions on Machine Learning Research (12/2025)

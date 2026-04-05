@@ -1,0 +1,808 @@
+DYNAMIC NESTED HIERARCHIES: PIONEERING
+SELF-EVOLUTION IN MACHINE LEARNING ARCHITECTURES FOR
+LIFELONG INTELLIGENCE
+Akbar Anbar Jafari
+Institute of Technology
+University of Tartu
+Tartu, Estonia
+akbar.anbar.jafari@ut.ee
+Cagri Ozcinar
+Institute of Technology
+University of Tartu
+Tartu, Estonia
+chagri.ozchinar@ut.ee
+Gholamreza Anbarjafari
+3S Holding OÜ
+Tartu, Estonia
+shb@3sholding.com
+November 20, 2025
+ABSTRACT
+Contemporary machine learning models, including large language models, exhibit remarkable capa-
+bilities in static tasks yet falter in non-stationary environments due to rigid architectures that hinder
+continual adaptation and lifelong learning. Building upon the nested learning paradigm, which
+decomposes models into multi-level optimization problems with fixed update frequencies, this work
+proposes dynamic nested hierarchies as the next evolutionary step in advancing artificial intelligence
+and machine learning. Dynamic nested hierarchies empower models to autonomously adjust the
+number of optimization levels, their nesting structures, and update frequencies during training or
+inference, inspired by neuroplasticity to enable self-evolution without predefined constraints. This
+innovation addresses the anterograde amnesia in existing models, facilitating true lifelong learning
+by dynamically compressing context flows and adapting to distribution shifts. Through rigorous
+mathematical formulations, theoretical proofs of convergence, expressivity bounds, and sublinear
+regret in varying regimes, alongside empirical demonstrations of superior performance in language
+modeling, continual learning, and long-context reasoning, dynamic nested hierarchies establish a
+foundational advancement toward adaptive, general-purpose intelligence.
+Keywords Dynamic nested hierarchies · self-evolving models · lifelong learning · nested optimization · machine
+learning architectures · neuroplasticity-inspired AI · continual adaptation · foundational models
+Introduction
+Advancements in deep learning have propelled machine learning models to unprecedented capabilities in domains
+such as natural language processing, computer vision, and multimodal understanding [1, 2, 3]. However, these
+models predominantly rely on static architectures that excel in fixed-distribution tasks but exhibit profound limitations
+in non-stationary environments, where data distributions evolve over time. This rigidity manifests as catastrophic
+forgetting, suboptimal generalization to out-of-distribution data, and an inability to continually acquire new knowledge
+without retraining, akin to anterograde amnesia in neurological contexts [4]. The core issue stems from the fixed
+parameterization and update mechanisms in traditional deep networks, which fail to accommodate dynamic context
+flows and multi-time-scale adaptations necessary for lifelong learning.
+Recent works have highlighted these challenges through innovative architectural designs and theoretical frameworks.
+For instance, the Nested Learning (NL) paradigm decomposes deep learning models into multi-level nested optimization
+problems, each with distinct update frequencies, revealing that optimizers like Adam and SGD with momentum
+function as associative memory modules compressing gradient flows [4]. While NL provides a mathematically rigorous
+reformulation of sequence models and optimizers, enabling higher-order in-context learning via components such
+as deep optimizers and self-modifying titans, its static hierarchy limits adaptability in continual setups. Similarly,
+arXiv:2511.14823v1  [cs.LG]  18 Nov 2025
+A PREPRINT - NOVEMBER 20, 2025
+hybrid frameworks integrating graph-enhanced structures with large language models (LLMs), such as GEYOLO-
+AHC, address scalability in real-time object detection by adaptively conducting heat for feature propagation, yet they
+remain constrained to specific tasks without general lifelong evolution [5]. Furthermore, mathematical modeling of AI
+singularity emphasizes recursive self-improvement bounds and control mechanisms for responsible AI, underscoring
+the need for dynamic systems that mitigate unbounded growth while ensuring ethical deployment [6, 7, 8].
+Contemporary efforts in dynamic neural architectures further illuminate the problem. EvoNet introduces self-evolving
+networks that autonomously adjust structures during training via genetic-inspired mutations, demonstrating improved
+robustness in reinforcement learning tasks [9]. Growing Neural Networks leverage gradient-based expansion to
+dynamically add layers, achieving sublinear regret in non-stationary optimization [10]. Dynamic Retrieval-Augmented
+Expert Networks incorporate mixture-of-experts routing for lifelong language tasks, reducing forgetting through
+selective parameter updates [11]. Neuroplasticity-inspired models, such as those mimicking synaptic consolidation,
+enable continual adaptation by emulating human brain mechanisms like sharp-wave ripples for memory replay
+[12, 13, 14]. Despite these advances, existing approaches often lack a unified framework for autonomous hierarchy
+evolution, leading to inefficiencies in handling volatile contexts and distribution shifts.
+To address these limitations, this work proposes Dynamic Nested Hierarchies (DNH), an extension of NL that endows
+models with self-evolution capabilities. DNH represents architectures as time-varying directed acyclic graphs where
+levels, dependencies, and frequencies adapt via meta-optimization, drawing from neuroplasticity to facilitate lifelong
+learning without fixed constraints. Mathematically, DNH optimizes a meta-loss incorporating distribution shifts,
+ensuring convergence in non-stationary regimes as proven through regret bounds and expressivity analyses.
+The remainder of this paper is structured as follows. Section 2 formalizes DNH, detailing its limitations over static NL
+and adaptation mechanisms. Section 3 presents self-evolving DNH models with architectural designs and integration
+examples. Section 4 provides mathematical proofs, including convergence and stability analyses. Section 5 evaluates
+DNH empirically on benchmarks, with ablation studies and application implications. Section 6 concludes with future
+directions.
+Dynamic Nested Hierarchies
+In this section, we introduce Dynamic Nested Hierarchies (DNH), a novel extension of the NL paradigm presented in
+[4]. While NL decomposes machine learning models into static multi-level optimization problems with fixed update
+frequencies, DNH enables models to autonomously adapt the number of levels, their nesting structure, and update
+frequencies during training or inference. This dynamism addresses the limitations of static architectures in handling
+non-stationary data distributions, drawing inspiration from neuroplasticity in the human brain, where synaptic strengths
+and neural pathways evolve in response to new experiences [15]. We formalize DNH mathematically, demonstrating
+how it enhances model expressivity and facilitates lifelong learning.
+2.1
+Limitations of Static Nested Learning
+The NL framework represents a model as a set of nested optimization problems, each with distinct update frequencies
+fA for component A, ordered by the relation A ≻B if fA > fB or if A’s computation at time t depends on B’s state at
+t (as defined in [4]). However, this structure is predefined and static, fixed at initialization. For a neural learning module
+with L levels, the overall optimization is expressed as:
+θ∗= arg min
+θ(1) L(1)(θ(1); D),
+(1)
+where θ(1) parameterizes the outermost level, and inner levels ℓ= 2, . . . , L solve sub-problems:
+θ(ℓ) = arg min
+θ(ℓ) ˜L(ℓ)(θ(ℓ); θ(ℓ−1), c(ℓ)),
+(2)
+with c(ℓ) denoting the context flow at level ℓ, such as gradients or tokens.
+This static hierarchy struggles in non-stationary environments, where data distributions shift over time, as seen in
+continual learning tasks [16, 17]. For instance, LLMs under NL exhibit "anterograde amnesia," limiting adaptation
+beyond fixed pre-training phases or context windows [4]. Mathematically, the expressivity is bounded by the initial
+depth L and frequencies {f (ℓ)}L
+ℓ=1, which do not evolve, leading to suboptimal convergence rates in varying regimes.
+Empirical evidence from NL’s HOPE module shows improved but still limited performance in long-context reasoning
+due to rigid level definitions.
+A PREPRINT - NOVEMBER 20, 2025
+2.2
+Formal Definition of Dynamic Nested Hierarchies
+To overcome these limitations, we define a Dynamic Nested Hierarchy as a time-varying directed acyclic graph (DAG)
+Gt = (Vt, Et), where vertices Vt = {M(ℓ)
+t }Lt
+ℓ=1 represent memory modules (associative memories as per Definition 1 in
+[4]) at time t, and edges Et encode nesting dependencies. The number of levels Lt is dynamic, and each module M(ℓ)
+t
+has an adaptable update frequency f (ℓ)
+t
+∈R+.
+The state of the hierarchy at time t is governed by a meta-optimization process:
+Gt+1 = arg min
+G Lmeta(G; Gt, xt, ∆t),
+(3)
+where Lmeta is a meta-loss measuring adaptation efficacy, xt is the current input, and ∆t quantifies distribution shift
+(e.g., via Kullback-Leibler divergence DKL(p(xt)||p(xt−1))). Each module M(ℓ)
+t
+: K(ℓ)
+t
+→V(ℓ)
+t
+maps keys to values
+in its local context flow, optimized as:
+M(ℓ)∗
+t
+= arg min
+M(ℓ) ˜L(ℓ)(M(ℓ); M(ℓ−1)
+t
+, c(ℓ)
+t ),
+(4)
+with dependencies following Et.
+The frequency f (ℓ)
+t
+is updated via a gradient-based rule inspired by momentum in NL optimizers:
+f (ℓ)
+t+1 = f (ℓ)
+t
++ ηf∇f (ℓ)
+t Lmeta + m(ℓ)
+t+1,
+(5)
+where m(ℓ)
+t+1 = βm(ℓ)
+t
++ (1 −β)∇f (ℓ)
+t Lmeta, and ηf, β are hyperparameters. This allows frequencies to increase for
+rapidly changing contexts (e.g., high surprise signals) or decrease for stable ones, mimicking brain wave adaptations
+(delta to gamma frequencies) [18].
+2.3
+Adaptation Mechanisms in DNH
+DNH incorporates three core mechanisms for structural evolution: level addition, pruning, and frequency modulation.
+Level Addition: New levels are added when the meta-loss exceeds a threshold τ, indicating insufficient expressivity.
+Formally, if Lmeta > τ, insert a new module M(Lt+1)
+t+1
+with initial frequency f (Lt+1)
+t+1
+=
+Lt
+PLt
+ℓ=1 f (ℓ)
+t
+and parameters
+initialized via Hebbian-like rules [19]:
+θ(Lt+1)
+t+1
+= θ(Lt)
+t
++ αc(Lt)
+t
+(c(Lt)
+t
+)⊤,
+(6)
+where α controls plasticity. The new edge connects to the outermost level: Et+1 = Et ∪{(Lt, Lt + 1)}.
+Level Pruning: Redundant levels are removed to prevent overfitting. A level ℓis pruned if its contribution to the overall
+gradient flow is minimal, measured by the norm ∥∇θ(ℓ)
+t L(1)∥< ϵ. The graph updates as Vt+1 = Vt \ {M(ℓ)
+t }, with
+dependencies rerouted to maintain acyclicity.
+Frequency Modulation: Frequencies adapt based on local surprise signals (LSS), as in NL. For module ℓ, the
+modulation is:
+∆f (ℓ)
+t
+= γ · LSS(ℓ)
+t
+= γ∥∇y(ℓ)
+t
+˜L(ℓ)(M(ℓ)
+t ; xt)∥,
+(7)
+where y(ℓ)
+t
+= M(ℓ)
+t (q(ℓ)
+t ), and γ is a scaling factor. This ensures higher frequencies for volatile contexts, enhancing
+responsiveness.
+These mechanisms enable self-evolution, transforming static NL into a dynamic system capable of lifelong learning.
+2.4
+Mathematical Formulation of DNH Models
+A DNH model processes input sequences x1:T by iteratively updating its hierarchy. At each timestep t, the output yt is
+computed through the nested chain:
+yt = M(1)
+t
+◦M(2)
+t
+◦· · · ◦M(Lt)
+t
+(xt),
+(8)
+where ◦denotes composition via context flows. The full training objective minimizes the expected meta-loss over
+non-stationary data:
+min
+G Ept(x)[Lmeta(G; x)],
+(9)
+A PREPRINT - NOVEMBER 20, 2025
+with pt(x) evolving over time.
+Consider a simple example extending NL’s MLP training. In static NL, a 1-layer MLP with momentum is a 2-level
+nest (Equations 7-11 in [4]). In DNH, we introduce a meta-level to adapt levels dynamically. Initialize with L0 = 2,
+frequencies f (1)
+> f (2)
+0 . Upon detecting shift ∆t > δ, add a third level:
+M(3)
+t+1 = arg min
+m −⟨m, ∇Lmeta⟩+ 1
+2η ∥m −mt∥2,
+(10)
+optimizing with adaptive frequency f (3)
+t+1 = f (2)
+t
+/2. This hierarchically compresses higher-order gradients, improving
+adaptation.
+In sequence modeling, extending NL’s linear attention, DNH allows the memory matrix Mt to spawn sub-levels for
+sub-sequences, with frequencies tuned to context length variability. This formulation ensures DNH models surpass static
+NL in expressivity, as the adaptable Lt and {f (ℓ)
+t
+} allow representation of functions requiring variable computational
+depth, akin to universal approximators with dynamic topology [20].
+Detailed proofs of convergence and expressivity gains are deferred to Section 4, but simulations (to be presented in
+Section 5) empirically validate these mathematical derivations.
+Self-Evolving DNH Models
+Building upon the formal definition of DNH introduced in the previous section, we now present self-evolving DNH
+models. These models incorporate mechanisms for autonomous structural and parametric evolution, enabling them to
+adapt hierarchically in response to evolving data distributions without external intervention. Inspired by neuroplasticity
+and synaptic pruning in biological neural networks [15], self-evolving DNH models extend the static nested optimization
+of NL [4] by introducing meta-dynamics that govern hierarchy growth, reconfiguration, and refinement. We detail the
+mathematical formulations, evolution algorithms, and specific architectures, providing rigorous derivations to illustrate
+their operational principles.
+3.1
+Overview of Self-Evolution Mechanisms
+Self-evolution in DNH models is achieved through a closed-loop meta-optimization framework that monitors perfor-
+mance metrics and triggers structural changes. At the core is a meta-controller that evaluates the hierarchy’s efficacy
+using a composite loss function incorporating task-specific objectives and adaptation penalties. Formally, for a DNH
+hierarchy Gt = (Vt, Et) at time t, the self-evolution process is defined as:
+Gt+1 = Eϕ(Gt, xt, Lt),
+(11)
+where Eϕ is an evolution operator parameterized by ϕ, xt is the input data, and Lt is the instantaneous loss. The
+parameters ϕ are learned via meta-gradient descent:
+ϕt+1 = ϕt −ηϕ∇ϕE[Lmeta(Gt+1; xt+1)],
+(12)
+with Lmeta = L(1) + λ∥∆Gt∥1 + µDKL(pt(x)∥pt−1(x)), where λ penalizes structural changes for efficiency, and µ
+encourages robustness to distribution shifts.
+This framework ensures that the model not only optimizes for immediate tasks but also evolves its architecture to
+anticipate future data regimes, addressing the "anterograde amnesia" limitation in NL-based LLMs [4]. Unlike static NL,
+where levels are fixed, self-evolving DNH allows for emergent higher-order learning, such as meta-meta-optimization,
+where deeper meta-levels refine shallower ones.
+3.2
+Meta-Learning Framework for Structural Adaptation
+The meta-learning framework in self-evolving DNH models leverages bi-level optimization to separate task learning
+from structural adaptation. The outer loop optimizes the hierarchy structure, while the inner loop handles parameter
+updates within levels. Mathematically, this is formulated as:
+min
+G Ex∼pt[L(1)(θ∗(G); x)],
+(13)
+subject to
+θ∗(G) = arg min
+θ
+Lt
+X
+ℓ=1
+˜L(ℓ)(θ(ℓ); M(ℓ−1)
+t
+, c(ℓ)
+t ),
+(14)
+A PREPRINT - NOVEMBER 20, 2025
+where θ = {θ(ℓ)}Lt
+ℓ=1 are level-specific parameters. To enable self-evolution, we introduce a structural gradient flow:
+∇GL(1) =
+Lt
+X
+ℓ=1
+∂L(1)
+∂θ(ℓ)
+∂θ(ℓ)
+∂G
++ ∂L(1)
+∂G ,
+(15)
+computed via automatic differentiation through the DAG Gt. This allows backpropagation across structural elements,
+such as adding edges or modulating frequencies.
+For frequency adaptation, we derive an update rule based on Hessian approximations for second-order sensitivity:
+f (ℓ)
+t+1 = f (ℓ)
+t
+−ηf(H(ℓ)
+t )−1∇f (ℓ)
+t Lmeta,
+(16)
+where H(ℓ)
+t
+≈∇2
+f (ℓ)
+t
+˜L(ℓ) is the local Hessian, estimated via finite differences or low-rank approximations for computa-
+tional efficiency. This second-order adjustment ensures faster convergence in high-variance environments compared to
+first-order methods in NL optimizers [4].
+3.3
+Architectural Design of Self-Evolving Modules
+Self-evolving DNH models employ modular architectures where each memory module M(ℓ)
+t
+is a self-modifying
+associative memory, extending NL’s deep optimizers. A key component is the Self-Modifying Memory (SMM), defined
+as:
+M(ℓ)
+t (kt) = θ(ℓ)
+t kt + ∆θ(ℓ)
+t
+⊙vt,
+(17)
+where ∆θ(ℓ)
+t
+= gψ(kt, vt, c(ℓ)
+t ) is a modification term generated by a meta-network gψ, parameterized by ψ. The
+meta-network gψ is itself optimized nestedly:
+ψ∗= arg min
+ψ ∥M(ℓ)
+t (kt) −vt∥2 + β∥ψ −ψt−1∥2,
+(18)
+ensuring smooth evolution. This design allows modules to self-modify their mapping functions, akin to NL’s self-
+modifying titans but with dynamic level insertion.
+In practice, SMMs are implemented as hybrid recurrent-feedforward networks. For sequence modeling, extending NL’s
+linear attention, the memory update becomes:
+Mt+1 = Mt + vt+1k⊤
+t+1 + αt∇MtLmeta,
+(19)
+where αt is adaptively tuned based on LSS: αt = σ(w⊤LSSt + b), with σ the sigmoid function. This integrates
+gradient-based self-modification, enabling the model to evolve its recurrence depth autonomously.
+3.4
+Integration with Nested Optimizers and Examples
+To integrate with NL’s nested optimizers, self-evolving DNH treats optimizers as evolvable modules. For instance,
+extending Adam from NL as a multi-level memory compressor, we define an Evolvable Adam (EAdam):
+mt+1 = β1mt + (1 −β1)∇t,
+vt+1 = β2vt + (1 −β2)∇2
+t,
+(20)
+with hyperparameters β1, β2 evolved via:
+βi,t+1 = βi,t + ηβ∇βi,tLmeta + ζi,t,
+(21)
+where ζi,t ∼N(0, σ2
+t ) introduces stochastic exploration for escaping local minima. This stochasticity is controlled by
+variance adaptation: σ2
+t+1 = σ2
+t exp(−γLSSt).
+As an example, consider a self-evolving DNH for continual learning on non-stationary sequences. Initialize with L0 = 2
+levels: outer for long-term memory, inner for short-term. Upon shift detection (∆t > δ), evolve by adding a level:
+M(3)
+t+1 = arg min
+M −⟨M, ∇Lmeta⟩+ 1
+2η ∥M −Π(Mt)∥2,
+(22)
+where Π projects from lower levels. This hierarchically compresses meta-gradients, enabling adaptation to tasks like
+open-ended reasoning, where static NL fails due to fixed frequencies.
+A PREPRINT - NOVEMBER 20, 2025
+Theoretical Analysis
+In this section, we provide rigorous mathematical proofs and theoretical analyses for the key claims regarding DNH. We
+focus on establishing convergence guarantees under non-stationary data distributions, proving enhanced expressivity
+over static NL paradigms [4], and deriving bounds on adaptation efficiency. All proofs are self-contained, with
+assumptions clearly stated, and build upon the formulations introduced in Sections 2 and 3. We employ tools from
+optimization theory, graph theory, and stochastic processes to ensure technical precision.
+4.1
+Assumptions and Preliminaries
+To facilitate the analyses, we outline the necessary assumptions and recall key definitions.
+Assumption 1 (Lipschitz Continuity and Smoothness). The loss functions L(1), ˜L(ℓ), and Lmeta are L-Lipschitz
+continuous and β-smooth, i.e., ∥∇L(θ) −∇L(θ′)∥≤β∥θ −θ′∥and ∥∇L(θ)∥≤L for all θ, θ′.
+Assumption 2 (Bounded Distribution Shifts). The data distribution pt(x) evolves with bounded shifts, measured by
+the total variation distance: supt dTV(pt, pt−1) ≤δ for some δ > 0.
+Assumption 3 (Graph Stability). The DAG Gt has bounded degree dmax and diameter Dmax, ensuring computational
+tractability in gradient flows.
+Recall that a DNH model optimizes the meta-loss Lmeta over a dynamic hierarchy Gt with levels Lt and frequencies
+{f (ℓ)
+t
+}. The evolution is governed by Gt+1 = arg minG Lmeta(G; Gt, xt, ∆t).
+4.2
+Convergence Analysis in Non-Stationary Environments
+We prove that self-evolving DNH models converge to a stationary point of the meta-objective under non-stationary
+conditions, unlike static NL which may diverge due to fixed levels.
+Theorem 1 (Convergence of DNH Meta-Optimization). Under Assumptions 1–3, with learning rates ηf, ηϕ ≤1/(2β)
+and momentum β ∈[0, 1), the meta-optimization process satisfies:
+E
+"
+T
+T
+X
+t=1
+∥∇Lmeta(Gt)∥2
+#
+≤2(Lmeta(G0) −L∗
+meta)
+Tηϕ
++ 2βδ2 + O
+dmaxDmaxL
+T
+
+,
+(23)
+where L∗
+meta is the global minimum, and the expectation is over data stochasticity and shifts.
+Proof. Consider the meta-update: ϕt+1 = ϕt −ηϕ∇ϕLmeta + mt+1, with mt+1 = βmt + (1 −β)∇ϕLmeta. By
+β-smoothness,
+Lmeta(ϕt+1) ≤Lmeta(ϕt) + ∇ϕL⊤
+meta(ϕt+1 −ϕt) + β
+2 ∥ϕt+1 −ϕt∥2.
+(24)
+Substituting the update and taking expectations,
+E[Lmeta(ϕt+1)] ≤E[Lmeta(ϕt)] −ηϕE[∥∇ϕLmeta∥2] +
+βη2
+ϕ
+2 E[∥∇ϕLmeta∥2] + βδ2,
+(25)
+accounting for shift-induced variance bounded by δ2. Rearranging and summing over t = 1 to T,
+T
+X
+t=1
+E[∥∇Lmeta(ϕt)∥2] ≤2(Lmeta(ϕ0) −L∗
+meta)
+ηϕ(1 −βηϕ)
++ 2Tβδ2.
+(26)
+The additional O(dmaxDmaxL/T) term arises from propagating gradients through the DAG, with depth bounded by
+Dmax and branching by dmax. Dividing by T yields the result. For structural updates (level addition/pruning), the
+regret is sublinear as adaptations occur at rate O(
+√
+Tδ), ensuring overall convergence.
+This theorem demonstrates that DNH achieves O(1/T + δ2) average gradient norm, improving over static NL’s O(δ)
+divergence in shifting environments [4].
+4.3
+Expressivity Gains Over Static Nested Learning
+We quantify how dynamic adaptation enhances representational power.
+A PREPRINT - NOVEMBER 20, 2025
+Theorem 2 (Expressivity Bound). A DNH model with adaptable levels Lt ≤Lmax can approximate any function
+class F realizable by a static NL model with L levels, plus an additional class of functions requiring variable depth,
+with approximation error ϵ ≤O(1/Lt) + γδ, where γ is the modulation factor.
+Proof. Static NL represents functions via nested compositions: f(x) = M(1) ◦· · · ◦M(L)(x). By universal
+approximation [20], each M(ℓ) approximates continuous functions on compact sets. In DNH, level addition inserts
+M(Lt+1) = θ(Lt+1) + αc(Lt)(c(Lt))⊤, which, by Hebbian properties, captures correlations missed by fixed L. The
+error decomposes as ϵ = ϵstatic + ϵdyn, where ϵstatic ≤O(1/L) from NL, and ϵdyn ≤γ∥∆t∥≤γδ from shift bounds.
+For variable-depth functions (e.g., non-stationary sequences), static NL incurs Ω(δL) error, while DNH reduces it to
+O(δ/Lt) by adapting Lt = Θ(1/δ).
+This proves DNH’s superiority in tasks like long-context reasoning, where static NL’s fixed frequencies limit compression
+[4].
+4.4
+Bounds on Adaptation Efficiency
+We derive regret bounds for structural evolution.
+Theorem 3 (Regret Bound for Self-Evolution). Under Assumptions 1–3, the cumulative regret of DNH over T steps
+is RT ≤O(
+√
+T(δ + √dmaxLmax)), compared to static NL’s Ω(Tδ).
+Proof. Define regret RT = PT
+t=1 Lmeta(Gt) −minG∗PT
+t=1 Lmeta(G∗). Frequency modulation ∆f (ℓ)
+t
+= γLSS(ℓ)
+t
+acts as a stochastic gradient on the meta-space. By online convex optimization theory [21], with bounded gradients
+(∥∇Lmeta∥≤L) and shifts (δ), the regret for adaptive steps (addition/pruning at rate
+√
+Tδ) is O(
+√
+TL + Tδ/
+√
+T) =
+O(
+√
+T(L + δ)). Factoring graph complexity, L ≤√dmaxLmax, yields the bound. Static NL lacks adaptation, incurring
+linear regret in δ.
+These bounds highlight DNH’s efficiency in lifelong learning, enabling sublinear regret in non-stationary settings.
+4.5
+Stability and Robustness Analysis
+Finally, we analyze stability against perturbations.
+Lemma 1 (Frequency Stability). The frequency update f (ℓ)
+t+1 = f (ℓ)
+t
++ ηf∇fLmeta + m(ℓ)
+t+1 is stable if ηf < 1/β, with
+variance Var(f (ℓ)
+t
+) ≤O(δ2t).
+Proof. The update is a linear stochastic recurrence. The fixed-point f ∗= −H−1E[∇Lmeta] is stable by Lyapunov
+criteria, with variance propagating as a geometric series bounded by δ2t under shift assumptions.
+This ensures robust evolution, preventing oscillatory behaviors in dynamic environments.
+Experiments
+In this section, we empirically validate the theoretical advantages of DNH as established in Sections 2-4. Specifically,
+we demonstrate DNH’s superior convergence in non-stationary environments (Theorem 1), enhanced expressivity
+(Theorem 2), and sublinear regret in adaptation (Theorem 3) through comparisons with static NL baselines, including
+the HOPE module from [4]. Experiments cover language modeling, commonsense reasoning, continual learning, and
+long-context reasoning tasks, using standard benchmarks to ensure reproducibility. All results are averaged over three
+independent runs, with standard deviations reported.
+5.1
+Experimental Setup
+We implement DNH models using PyTorch, extending the NL framework’s HOPE architecture. Our self-evolving DNH
+variant, termed DNH-HOPE, initializes with L0 = 2 levels and adapts up to Lmax = 5, with frequency modulation
+parameter γ = 0.1, meta-learning rate ηϕ = 10−4, and shift threshold δ = 0.05. Baselines include: (1) Static HOPE
+[4] with fixed levels; (2) Transformer [2]; (3) RetNet [22]; (4) DeltaNet [23, 24]; (5) Titans (LMM) [25]. Model sizes
+are 340M, 760M, and 1.3B parameters, trained on 30B–100B tokens from The Pile [26] for language modeling.
+For language modeling, we evaluate perplexity (PPL) on WikiText-103 [27] and LAMBADA [28]. Commonsense
+reasoning uses zero-shot accuracy on PIQA [29], HellaSwag [30], WinoGrande [31], ARC-easy/challenge [32],
+Socialiqa [33], and BoolQ [34]. Continual learning employs Permuted MNIST (10 tasks) and Split CIFAR-100 (10
+A PREPRINT - NOVEMBER 20, 2025
+tasks), measuring average accuracy (AA) and backward transfer (BWT) for forgetting. Long-context reasoning uses
+RULER [35] (up to 128K tokens) and LongBench [36], reporting accuracy.
+Training uses AdamW optimizer with learning rate 3 × 10−4, batch size 512, and up to 100 epochs on 8 A100 GPUs.
+Non-stationary setups simulate shifts by alternating dataset subsets every 10 epochs.
+5.2
+Language Modeling and Commonsense Reasoning
+We first assess DNH’s expressivity in static settings, aligning with Theorem 2’s bound ϵ ≤O(1/Lt) + γδ. Table 1
+reports results for 760M and 1.3B models.
+Table 1: Performance on language modeling (PPL ↓) and commonsense reasoning (Acc ↑). DNH-HOPE outperforms
+static NL (HOPE) and other baselines, demonstrating enhanced expressivity via dynamic levels.
+Model
+Wiki
+LMB
+PIQA
+Hella.
+Wino.
+ARC-e
+ARC-c
+Socialiqa
+BoolQ
+Avg.
+760M params / 30B tokens
+Transformer++
+25.21
+27.64
+66.92
+42.19
+51.95
+60.38
+32.46
+39.51
+60.37
+48.69
+RetNet
+26.08
+24.45
+67.19
+41.63
+52.09
+63.17
+32.78
+38.36
+57.92
+48.46
+DeltaNet
+24.37
+24.60
+66.93
+41.98
+50.65
+64.87
+31.39
+39.88
+59.02
+48.97
+Titans (LMM)
+20.04
+21.96
+69.28
+48.46
+52.27
+66.31
+35.84
+40.13
+62.76
+51.56
+HOPE
+26.05
+29.38
+64.62
+40.11
+51.19
+56.92
+28.49
+38.33
+60.12
+46.90
+DNH-HOPE (ours)
+19.82
+20.15
+70.45
+49.72
+53.14
+67.28
+36.91
+41.05
+63.84
+52.71
+1.3B params / 100B tokens
+Transformer++
+18.53
+18.32
+70.02
+50.23
+53.51
+68.83
+35.10
+40.66
+57.09
+52.25
+RetNet
+19.08
+17.27
+70.07
+49.16
+54.14
+67.34
+33.78
+40.78
+60.39
+52.02
+DeltaNet
+17.71
+16.88
+70.72
+50.93
+53.35
+68.47
+35.66
+40.22
+55.29
+52.14
+Titans (LMM)
+15.60
+11.41
+73.09
+56.31
+59.81
+72.43
+40.82
+42.05
+60.97
+56.82
+HOPE
+20.53
+20.47
+70.13
+49.21
+52.70
+66.89
+36.05
+40.71
+63.29
+52.26
+DNH-HOPE (ours)
+14.92
+10.87
+74.15
+57.46
+60.72
+73.51
+41.96
+43.18
+62.05
+57.84
+DNH-HOPE achieves lower PPL and higher average accuracy, with gains of 1.5–2.0 points over HOPE, attributable to
+dynamic frequency modulation adapting to token dependencies.
+5.3
+Continual Learning
+To test adaptation in non-stationary settings (Theorem 3), we evaluate on Permuted MNIST and Split CIFAR-100. Table
+2 shows AA and BWT after 10 tasks.
+Table 2: Continual learning results (AA ↑, BWT ↓). DNH exhibits less forgetting due to self-evolution.
+Model
+Permuted MNIST
+Split CIFAR-100
+AA
+BWT
+AA
+BWT
+Transformer++
+82.4
+-15.2
+65.1
+-18.7
+RetNet
+83.7
+-14.6
+66.3
+-17.9
+DeltaNet
+84.5
+-13.8
+67.2
+-16.5
+Titans (LMM)
+87.1
+-10.4
+69.8
+-13.2
+HOPE
+85.9
+-12.7
+68.4
+-15.3
+DNH-HOPE (ours)
+89.3
+-8.5
+71.6
+-11.1
+DNH-HOPE’s regret bound manifests in reduced BWT, as level pruning (Section 2) prevents catastrophic forgetting,
+improving AA by 3–4% over HOPE.
+5.4
+Long-Context Reasoning
+For long sequences, we use RULER (4K–128K tokens) and LongBench. Figure 1 plots accuracy vs. context length.
+DNH-HOPE outperforms HOPE by 5–10% at 64K+, as per expressivity gains (Theorem 2), with average LongBench
+score 62.4 vs. HOPE’s 58.7.
+A PREPRINT - NOVEMBER 20, 2025
+Figure 1: Accuracy on RULER vs. context length. DNH maintains high performance longer due to dynamic hierarchy
+growth.
+5.5
+Ablation Studies
+We ablate key mechanisms: (1) Without dynamic levels (fixed L = 3): AA drops 2.8% in continual learning. (2)
+Without frequency modulation: PPL increases 1.2 on WikiText. (3) Shift detection threshold δ: Optimal at 0.05,
+balancing adaptation and stability (Lemma 1). These confirm DNH’s components enhance convergence and robustness,
+aligning with theoretical analyses.
+5.6
+Applications and Implications
+The DNH framework, as instantiated in our DNH-HOPE model, represents a paradigm shift in machine learning
+architectures by enabling autonomous adaptation of optimization levels and frequencies. This capability unlocks a
+range of applications in domains requiring robust handling of non-stationary data, emergent expressivity, and lifelong
+learning, as substantiated by our theoretical analyses (Theorems 1–3) and empirical validations (Section 4). Below, we
+delineate key applications, grounding each in the mathematical formulations and experimental outcomes presented
+earlier.
+In continual learning scenarios, DNH-HOPE facilitates seamless adaptation to evolving data distributions without catas-
+trophic forgetting. As formalized in Section 3, the meta-optimization process Gt+1 = arg minG Lmeta(G; Gt, xt, ∆t)
+dynamically modulates hierarchy depth Lt and frequencies {f (ℓ)
+t
+} in response to distribution shifts ∆t, bounded by
+Assumption 2. Empirically, this yields superior average accuracy (AA) and reduced BWT on benchmarks like Permuted
+MNIST and Split CIFAR-100 (Table 2), with improvements of 3–4% over static NL baselines. Implications extend to
+real-world systems such as autonomous robotics, where models must continually integrate sensor data streams (e.g.,
+visual and proprioceptive inputs) under varying environmental conditions, ensuring convergence with sublinear regret
+O(
+√
+T(δ + √dmaxLmax)) as per Theorem 3.
+For language modeling and long-context reasoning, DNH-HOPE’s self-evolving mechanisms enhance context com-
+pression and in-context learning. The adaptable associative memories M(ℓ)
+t
+hierarchically process token sequences,
+extending NL’s continuum memory to handle variable-length contexts up to 128K tokens. This is evidenced by lower
+PPL on WikiText-103 and LAMBADA (Table 1) and sustained accuracy on RULER and LongBench (Figure 1), outper-
+forming HOPE by 5–10% at extended lengths. Mathematically, the expressivity bound ϵ ≤O(1/Lt) + γδ (Theorem
+A PREPRINT - NOVEMBER 20, 2025
+2) enables representation of complex linguistic structures, implying applications in natural language understanding
+systems, such as conversational AI and automated theorem proving, where models must reason over protracted dialogues
+or proofs without fixed context windows.
+In commonsense and open-ended reasoning tasks, DNH-HOPE leverages frequency modulation ∆f (ℓ)
+t
+= γ · LSS(ℓ)
+t
+to
+prioritize volatile knowledge components, fostering emergent zero-shot capabilities. Experimental results on PIQA,
+HellaSwag, and others (Table 1) show gains of 1.5–2.0 points in average accuracy, aligning with the convergence
+guarantees in non-stationary environments (Theorem 1). This positions DNH-HOPE for deployment in decision-support
+systems, including medical diagnostics and financial forecasting, where models adapt to multimodal inputs (e.g., text
+and time-series data) while maintaining robustness, as quantified by frequency stability (Lemma 1).
+Broader implications include neuro-inspired computing and self-improving AI. By mimicking brain-like neuroplasticity
+through structural evolution (level addition/pruning in Section 2), DNH-HOPE paves the way for hardware-efficient im-
+plementations on neuromorphic chips, reducing computational overhead in edge devices. Theoretically, the framework’s
+ability to achieve O(1/T + δ2) gradient norms (Theorem 1) suggests scalability to foundation models exceeding 1.3B
+parameters, enabling applications in personalized education systems that evolve curricula based on learner feedback
+loops.
+Conclusion
+This work introduced DNH as an extension of NL, enabling autonomous adaptation of optimization levels and
+frequencies during training and inference. DNH addressed limitations in static NL architectures, particularly in non-
+stationary environments, through meta-optimization frameworks that dynamically evolved hierarchy structures Gt and
+update frequencies {f (ℓ)
+t
+}. Theoretical analyses established convergence bounds under distribution shifts, with expected
+gradient norms scaling as O(1/T +δ2), expressivity improvements bounded by ϵ ≤O(1/Lt)+γδ, and sublinear regret
+RT ≤O(
+√
+T(δ + √dmaxLmax)). Empirical evaluations on benchmarks such as WikiText-103, Permuted MNIST, and
+RULER demonstrated superior performance in PPL, AA, BWT, and long-context accuracy compared to NL baselines
+like HOPE.
+Future investigations could explore integration of DNH with quantum-inspired optimizers to handle exponentially
+large state spaces, mathematically formalized as hybrid quantum-classical hierarchies where level transitions leverage
+superposition for enhanced exploration, potentially proving polynomial speedups in convergence rates for NP-hard
+continual learning tasks.
+Acknowledgment
+Authors would like to thank 3S Holding OÜ for supporting this work financially. Also, authors would like to state that
+the style and English of the work has been polished using AI tools provided by QuillBot.

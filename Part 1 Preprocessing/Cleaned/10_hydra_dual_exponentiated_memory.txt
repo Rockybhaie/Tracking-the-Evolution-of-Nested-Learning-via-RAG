@@ -1,0 +1,1308 @@
+HYDRA: Dual Exponentiated Memory for Multivariate Time Series Analysis
+Asal Meskin*1, Alireza Mirrokni*1, Ali Najar*1, Ali Behrouz 2
+1 Sharif University of Technology
+2 Cornell University
+{asal.meskin82, alireza.mirrokni28, ali.najjar82}@sharif.edu , alibehrouz@cs.cornell.edu
+Abstract
+In recent years, effectively modeling multivariate time se-
+ries has gained significant popularity, mainly due to its wide
+range of applications, ranging from healthcare to financial
+markets and energy management. Transformers, MLPs, and
+linear models as the de facto backbones of modern time se-
+ries models have shown promising results in single-variant
+and/or short-term forecasting. These models, however: (1) are
+permutation equivariant and so lack temporal inductive bias,
+being less expressive to capture the temporal dynamics; (2)
+are naturally designed for univariate setup, missing the inter-
+dependencies of temporal and variate dimensions; and/or (3)
+are inefficient for Long-term time series modeling. To over-
+come training and inference efficiency as well as the lack
+of temporal inductive bias, recently, linear Recurrent Neural
+Networks (RNNs) have gained attention as an alternative to
+Transformer-based models. These models, however, are in-
+herently limited to a single sequence, missing inter-variate
+dependencies, and can propagate errors due to their additive
+nature. In this paper, we present HYDRA, a by-design two-
+headed meta in-context memory module that learns how to
+memorize patterns at test time by prioritizing time series pat-
+terns that are more informative about the data. HYDRA uses a
+2-dimensional recurrence across both time and variate at each
+step, which is more powerful than mixing methods. Although
+the 2-dimensional nature of the model makes its training re-
+current and non-parallelizable, we present a new 2D-chunk-
+wise training algorithm that approximates the actual recur-
+rence with ×10 efficiency improvement, while maintaining
+the effectiveness. Our experimental results on a diverse set of
+tasks and datasets, including time series forecasting, classifi-
+cation, and anomaly detection show the superior performance
+of HYDRA compared to state-of-the-art baselines.
+Introduction
+Modeling multivariate time series has been a crucial task in
+recent years, mainly due to its connection to understand-
+ing and predicting complex systems and its applications
+in a wide range of domains such as healthcare (Behrouz,
+Delavari, and Hashemi 2024; Ivanov et al. 1999), fi-
+nance (Gajamannage, Park, and Jayathilake 2023; Pincus
+and Kalman 2004), energy (Zhou et al. 2021), transporta-
+tion (Durango-Cohen 2007), and weather (Allen et al. 2025;
+*These authors contributed equally.
+Price et al. 2025). The complex and diverse patterns in mul-
+tivariate time series data (e.g., seasonal, trend, etc.), its non-
+stationary nature, and the inter-dependencies among vari-
+ates make understanding and learning from them consider-
+ably challenging. Motivated by the success of Transform-
+ers (Vaswani et al. 2017) in diverse data modalities such
+as text (Vaswani et al. 2017; Keskar et al. 2019; Kamath
+et al. 2025), images and videos (Dosovitskiy et al. 2020;
+Liu et al. 2021b), and graphs (Yun et al. 2019; M¨uller
+et al. 2024) and to address the above challenges, employing
+Transformer-based architectures for time series has gained
+popularity (Liu et al. 2024d; Woo et al. 2022; Zhou et al.
+2021; Wu et al. 2022b; Lin et al. 2023; Chen et al. 2024).
+Transformers, however, have some important inherent
+characteristics that make their applicability to modeling time
+series data challenging: (1) Transformers are permutation
+equivariant and do not have parametric temporal formula-
+tion (see Section 3), lacking natural temporal inductive bias;
+(2) Their design can cause them to overfit on small-scale
+datasets like time series data, requiring more sparsity in their
+weight patterns to be able to adapt to out-of-distribution
+(OOD) data; and (3) Their quadratic time and memory com-
+plexity make them infeasible for many ultra long-term time
+series modeling. All these limitations have made the appli-
+cability of Transformers for time series data challenging. For
+example, their inherent lack of temporal inductive bias con-
+tradicts the causal nature of time series and their complexity
+that causes overfitting to training data distribution often re-
+sults in suboptimal performance compared to even simple
+linear methods (Zeng et al. 2023a).
+In recent years, there have been significant research ef-
+forts to design alternative recurrent architectures that can
+overcome the efficiency issue of Transformers while main-
+taining (or improving) their effectiveness (Behrouz, Zhong,
+and Mirrokni 2024; Behrouz et al. 2025c; Peng et al.
+2023; Sun et al. 2023, 2024; Schlag, Irie, and Schmidhu-
+ber 2021b). The recurrent nature of such architectures pro-
+vide them with a temporal inductive bias and makes them a
+suitable architectural backbones for time series understand-
+ing (Hou and Yu 2024; Behrouz, Santacatterina, and Zabih
+2024a; Jia et al. 2023). Despite this advantage, the additive
+nature of their recurrence can cause error propagation over
+time and therefore requires additional careful parametriza-
+tion or design to achieve a good performance (Jia et al.
+arXiv:2511.00989v1  [cs.LG]  2 Nov 2025
+2023; Behrouz, Santacatterina, and Zabih 2024a). Further-
+more, a subset of these models (as well as Transformer-
+based models) overlook the importance of variate depen-
+dencies in learning from multivariate time series data (Zeng
+et al. 2023a; Zhang et al. 2023; Nie et al. 2023a). While sev-
+eral studies aim to design models that take advantage of data
+mixing across both time and variate (Zhang and Yan 2023a;
+Li et al. 2023b; Wang et al. 2022), they might face chal-
+lenges in real-world tasks (Chen et al. 2023) as these variate
+dependencies are not always useful in practice; specifically
+when the target variate is not correlated with other covari-
+ates (Chen et al. 2023). Therefore, we argue that an effective
+time series model needs to adaptively learn to capture the
+dependencies of variates over time.
+1.1
+Contributions
+To overcome the abovementioned challenges, we first
+present EGD-MEMORY, a new recurrent sequence model
+that utilizes a meta in-context memory to learn how to mem-
+orize at test time. Following recent surprise-based mem-
+ory modules (Behrouz et al. 2025c; Behrouz, Zhong, and
+Mirrokni 2024) that prioritize the patterns violating the ex-
+pectation from the past data, we design EGD-MEMORY so
+it also memorizes more surprising patterns while promot-
+ing the sparsity in the memory weights. This sparsity in
+the memory is particularly important for time series data
+as mitigate overfitting to the training set distribution (see
+our experiments in Section 5 for the details). Building upon
+EGD-MEMORY, we present HYDRA, a 2-dimensional vari-
+ant of EGD-MEMORY that dynamically aggregate the in-
+formation across both time and variate at each time step.
+We then show that HYDRA is theoretically more powerful
+than mixing models that separately mix information across
+time and variates, incorporating the time-mixed and variate-
+mixed information outside of the hidden space. Despite the
+expressive power of this model, its design is naturally recur-
+rent and cannot simply be trained in a parallelizable manner.
+To overcome this issue, we present a novel 2-dimensional
+chunking algorithm that divides the grid (i.e., multivariate
+time series) into smaller rectangulars and make the training
+parallel inside each chunk. In our experimental evaluations,
+we perform extensive experiments on time series forecasting
+(ultra-long-term, long-term, and short-term), classification,
+and anomaly detection tasks. The results indicate the signif-
+icance of our design and show the superior performance of
+HYDRA compared to state-of-the-art baselines.
+Preliminaries and Related Work
+In this section, we briefly provide the notation we use
+through the paper and then review related studies. More de-
+tails on the related work and background concepts are pro-
+vided in Appendix (A).
+2.1
+Notation
+We denote a multivariate time series by the matrix X =
+(x1
+. . .
+xV ) ∈RV ×T ×din where T and V are the num-
+ber of time stamps and variates, and din is the feature di-
+mension of the input. We use bold fonts for vectors and bold
+uppercase letters for matrices. We use xv,t ∈Rdin to refer to
+the value of the time series in v-th variate at time t. We fol-
+low the literature (Wu et al. 2023; Behrouz, Santacatterina,
+and Zabih 2024a) and use “seasonal patterns” to refer to re-
+peating and periodic patterns in the data and “trend patterns”
+to refer to general long-term movement in the data. In this
+paper, we focus on forecasting, classification, and anomaly
+detection. In forecasting, given the historical time series se-
+ries X, the objective is to predict the next H time steps, pro-
+ducing eX ∈RV ×H×din. For classification and anomaly de-
+tection, the task is to assign a label to the sequence, where
+anomaly detection is treated as a binary classification prob-
+lem, distinguishing ”normal” from ”anomaly” sequences.
+2.2
+Autoregressive Process
+Autoregressive models are critical components in time se-
+ries analysis, predicated on the principle that current obser-
+vations are influenced by past values, capturing the inherent
+causal structure within sequential data. For a given integer
+p ∈N and a vector xk ∈Rd representing the observation
+at time k, a standard linear autoregressive model of order p,
+denoted as AR(p), expresses xk as a linear combination of
+its p preceding samples:
+xk =
+p
+X
+i=1
+ϕixk−i
+where ϕ1, . . . , ϕp are the autoregressive coefficients. This
+framework can further be extended to accommodate sea-
+sonal patterns often observed in time series data. The Sea-
+sonal Autoregressive (SAR(p, q, s)) model incorporates de-
+pendencies on past observations at seasonal lags. Specifi-
+cally, it is defined as:
+xk =
+p
+X
+i=1
+ϕixk−i +
+q
+X
+j=1
+ηjxk−js,
+(1)
+In this formulation, s denotes the seasonal period (e.g.,
+the number of observations in one seasonal cycle), while
+ϕ1, . . . , ϕp (resp. η1, . . . , ηq) represent the non-seasonal
+(resp. seasonal) autoregressive coefficients.
+2.3
+Traditional Time Series Models
+Modeling complex patterns in time series data has been in
+the core of research in statistics, mathematics, and computer
+science. Traditional techniques such as exponential smooth-
+ing (Winters 1960), autoregressive integrated moving aver-
+age (ARIMA) models (Bartholomew 1971), their seasonal
+counterparts (SARIMA) (Bender and Simonovic 1994), the
+Box-Jenkins methodology (Box and Jenkins 1968) and, in
+more recent times, state-space models (Harvey 1990; Aoki
+2013) have been the backbone of time series models. Their
+reliance on hand-crafted features and their limited ability to
+model non-linear patterns, however, have made their appli-
+cability to large-scale complex datasets challenging.
+2.4
+Deep Learning-based Time Series Models
+To overcome the limitation of traditional statistical mod-
+els and with the widespread use of deep learning architec-
+tures, Transformers have gained popularity as the backbone
+of modeling multivariate time series data, primarily due to
+their effectiveness in modeling complex inter-dependencies
+among variates and along the temporal dimension (Zhou
+et al. 2022a; Kitaev, Kaiser, and Levskaya 2020; Zhang and
+Yan 2023a; Zeng et al. 2023a; Zhou et al. 2021; Liu et al.
+2021a; Wu et al. 2021; Ilbert et al. 2024; Nie et al. 2023a;
+Wu et al. 2023; Liu et al. 2024d). Despite the competitive
+performance of pure Transformer-based architectures, their
+quadratic time and memory complexity cause critical chal-
+lenges to use them for Long-term forecasting or on tasks
+that require modeling Long-term dependencies. To over-
+come these challenges, recently designing more efficient and
+effective attention mechanisms that leverage the intrinsic
+properties of time series data (Woo et al. 2022) has gained
+attention. Concurrently, MLP-based architectures and lin-
+ear recurrent models (Tolstikhin et al. 2021; Wang et al.
+2022; Behrouz, Zhong, and Mirrokni 2024; Sun et al. 2024;
+Christou et al. 2024) have emerged as promising alternatives
+to Transformers, demonstrating surprisingly strong perfor-
+mance on various forecasting benchmarks (Wu et al. 2023;
+Christou et al. 2024; Chen et al. 2023).
+Furthermore, convolution-based models that are care-
+fully designed for time series data have shown outstanding
+performance in various downstream tasks (Luo and Wang
+2024b; Cao et al. 2025). More recently, deep learning mod-
+els founded on Koopman operator theory have been devel-
+oped to explicitly address non-linear dynamics within time
+series (Liu et al. 2023b; Wang et al. 2023b). However, many
+existing Koopman-based methods tend to model the dynam-
+ics of individual variates separately, which may limit their
+ability to capture complex cross-variate dependencies. Fi-
+nally, despite the recent progress in designing naturally 2-
+dimensional recurrent models (Jia et al. 2023; Behrouz, San-
+tacatterina, and Zabih 2024a; Behrouz et al. 2025a), they:
+(1) lack data-dependent gating mechanism that filters irrele-
+vant data; (2) are based on recurrent memory that results in
+a dense representation, potentially overfitting to the training
+data; (3) rely on attention mechanism that limits the general-
+ization to cases with noisy variates; and/or (3) are based on
+hebbian-rule memory update that limits the memory man-
+agement on long forecasting tasks.
+EGD-MEMORY: A Powerful and Robust
+Sequence Model
+Next, we present EGD-MEMORY, a novel recurrent neural
+architecture that takes advantage of a meta in-context mem-
+ory module to learn how to memorize at test time (following
+recent studies on memory design (Sun et al. 2024; Behrouz,
+Zhong, and Mirrokni 2024; Behrouz et al. 2025c)).
+3.1
+Neural Memory with Sparse Weights
+In modeling time series data, one of the important factors
+in designing a powerful model is its ability to capture long-
+term dependencies. It, however, can be extremely challeng-
+ing for: (1) Transformers, mainly due to their quadratic time
+and memory complexity and so their inefficiency when in-
+creasing the context length; (2) Recurrent Neural Networks
+(RNNs), mainly due to their fixed-size memory (i.e., hidden
+state) that because of compression cannot directly attend to
+all past time stamps; (3) Convolutions, mainly due to their
+local nature that fuses the information about each time point
+with its local neighborhood. We design a long-term memory
+module that is inherently a recurrent model with a fixed-size
+memory but: (i) its memory is not a single-matrix and so has
+more expressive power to compress the information; (ii) its
+update rule implicitly encourages the compression patterns
+to be sparse, making the model well-suited for tasks that re-
+quire adaptability to out-of-distribution data; (iii) has a fast
+linear-time parallelizable training, making it practically suit-
+able for tasks that require modeling long-term dependencies.
+Following
+recent
+advances
+in
+sequence
+model-
+ing (Behrouz, Zhong, and Mirrokni 2024; Sun et al.
+2024; Behrouz et al. 2025c), the main idea behind the
+design of our model is to use a memory module that
+learns how to compress the past data into its parameters.
+Similar to Transformers (Vaswani et al. 2017) and mod-
+ern RNNs (Peng et al. 2023; Sun et al. 2023; Behrouz,
+Zhong, and Mirrokni 2024), we build upon the definition
+of associative memory, in which the memory aims to learn
+the mapping between a set of keys and a set of values. In
+practice, these keys and values are different projections of
+the input sequence, allowing the model to learn underlying
+patterns between different elements of the sequence. Ac-
+cordingly, following the literature, we use linear layers to
+project the input into keys, values, and queries:
+kt = Wkxt,
+vt = Wvxt,
+qt = Wqxt,
+(2)
+where Wk, Wv, and Wq are learnable matrices. Then, we
+use the loss function of ℓ(Mt; kt; vt) = ∥Mt(kt) −vt∥2
+as the objective to measure the predicted mappings between
+keys and values. Therefore, our memory module Mt aims
+to minimize the above objective and so:
+M∗= arg min
+M ℓ(M; kt, vt),
+(3)
+for each t ∈{1, . . . , T}. Since M is a neural network with
+possible non-nonlinearities, finding the exact optimal solu-
+tion might not be possible. Therefore, we optimize the objec-
+tive ℓ(·) using an optimization algorithm. A natural choice
+for the optimization algorithm is gradient descent, a com-
+monly used optimization technique that iteratively updates
+M based on the gradient of the objective to converge to an
+optimal solution. However, the main drawback of such an
+approach is to overfitting to a local optimal point. To this
+end, we use a variant of the gradient descent, called Expo-
+nentiated Gradient Descent (EGD), that changes the additive
+nature of the GD to a multiplicative formulation, providing
+an inherent inductive bias for sparsity in weights (Cornford
+et al. 2024). Given an initial state of memory M0 ∈M,
+where M is an arbitrary class of functions (neural archi-
+tecture), and input data X = {xi}T
+i=1, EGD optimizes the
+optimization problem in Equation (3) as follows:
+Mt = Mt−1 ⊙exp (−ηt∇ℓ(Mt−1; xt)) ,
+(4)
+where ηt ∈R≥0 is an adaptive learning rate. Note that
+this natural inductive bias of EGD for finding sparser so-
+lution, which comes from its multiplicative nature (Corn-
+ford et al. 2024), avoids overfitting and so makes it a pow-
+erful optimizer for the scenarios that adaptation to Out-Of-
+Distribution (OOD) data is a must (e.g., time series data).
+Later in our experimental results we support the effective-
+ness of this design, particularly for time series data.
+In this work, we use a simple ℓ2 regression loss as the
+objective, i.e., ℓ(M; kt, vt) = ∥M(kt) −vt∥2
+2, where
+kt and vt are keys and values corresponds to input xt,
+obtained from Equation (2). Therefore, using its gradient
+∇ℓ(Mt−1; kt, vt) = (Mt−1(kt) −vt)k⊤
+t in Equation (4),
+we have an update rule for the memory M as:
+Mt = Mt−1 ⊙exp
+ −ηt(Mt−1(kt) −vt)k⊤
+t
+
+.
+(5)
+Assuming that the initial weights are initialized with positive
+values, we can write the update rule in an additive formula-
+tion by taking the log from both sides of the formulation:
+log (Mt) = log (Mt−1) −ηtMt−1(kt)k⊤
+t + ηtvtk⊤
+t . (6)
+Our design of the above recurrent neural network is sup-
+ported by the fact that memory Mt is learning the underly-
+ing mapping between different components of the input data
+(e.g., different time points in time series data) by optimizing
+ℓ(M; kt, vt) = ∥M(kt) −vt∥2
+2. Therefore, with enough
+iterations, we expect the model to converge to an optimal
+point, in which the memory can map key kt to its corre-
+sponding value vt, i.e., M(kt) ≈vt. Also, the use of EGD
+for optimizing the objective guarantees a level of sparsity
+in the solution, avoiding overfitting and enhancing general-
+izability (see Section 5 for evaluations). Due to the fixed-
+size memory state in the above model, we follow Behrouz,
+Zhong, and Mirrokni (2024) and use a gating mechanism to
+control the retention of the past memory. That is, we use a
+learnable input-dependent parameter αt ∈[0, 1] to control
+the retention from the past state of the memory:
+log (Mt) = αt log (Mt−1) −ηtMt−1(kt)k⊤
+t + ηtvtk⊤
+t .
+(EGD-MEMORY)
+When α →1, the above recurrence retains all the past state
+of the memory and when αt →0, it erases the past state of
+the memory, forgetting the past information.
+3.2
+Fast Parallel Training
+Despite the firm theoretical motivations for the design
+of Equation (EGD-MEMORY), its recurrent formulation
+is non-linear and cannot be parallelized. The main rea-
+son comes from the log(·) operation that acts as a non-
+linearity and requires a sequential computation. Following
+recent advances in hybrid chunk-wise recurrent training al-
+gorithms (Sun et al. 2024; Behrouz et al. 2025c), we divide
+the sequence {x1, . . . , xT } with length T into C chunks
+of size b =
+T
+C , each of which is represented by Si =
+{x(i−1)b+1, . . . , xib}. Then, for each token xt in the i-th
+chunk, we calculate the gradient with respect to the last state
+of the previous chunk, i.e., Mt′, where t′ = ⌊t
+b⌋b:
+Mt = Mt−1 ⊙exp (−ηt∇ℓ(Mt′; kt, vt)) ,
+⇒log (Mt) = αt log (Mt−1) −ηtMt′(kt)k⊤
+t + ηtvtk⊤
+t .
+Note that since we process chunks in a sequential manner,
+we have computed the state of Mt′(·) before processing the
+i-th chunk, and so all ut = Mt′(kt)k⊤
+t +vtk⊤
+t can be com-
+puted at the same time in parallel before starting to process
+the i-th chunk. Therefore, we can revisit the recurrence in
+each chunk as:
+˜
+Mt = αt ˜
+Mt−1 −ηtut,
+(7)
+where ˜
+Mt = log (Mt). The above update rule is a linear re-
+currence and so can be computed in parallel for each chunk
+using parallel scan or matrix multiplication. For the sake of
+simplicity, consider the first chunk with initial state of ˜
+M0.
+Then we can simply expand the recurrence as:
+˜
+Mt = αt ˜
+Mt−1 −ηtut
+= α1 . . . αb ˜
+M0 −
+b
+X
+i=1
+αb . . . α1
+αi . . . α1
+× ηiui
+= α1 . . . αb ˜
+M0 −AEU,
+(8)
+where A = diag( αb...α1
+αi...α1 ), E = diag(ηi), and U is the
+matrix with i-th column equal to ui, for i = 1, . . . , b. There-
+fore, the above recurrence can be reformulated as matrix
+multiplication, making it parallelizable for training.
+HYDRA: 2-Dimensional EGD-MEMORY
+for Multivariate Time Series
+In the previous section, we presented a novel sequence
+model motivated by the need for a more expressive memory
+module and improved memory management (i.e., optimizer)
+that helps to converge to a sparser solution, which is partic-
+ularly important for time series data. The main drawback of
+the described sequence model for multivariate time series
+data is its univariate nature. That is, it can only learn from
+a single sequence and misses the rich information of inter-
+dependencies of variates in multivariate time series data. To
+this end, in this section, we extend our EGD-MEMORY and
+present a native 2-dimensional model, called HYDRA, that
+can leverage both cross-time and cross-variate dependencies
+in the multivariate time series data (see Figure 1).
+4.1
+2-Dimensional Memory Update
+The main idea of HYDRA is to use two memory mod-
+ules M(1) and M(2), each of which is responsible for
+capturing dependencies across time or variates. However,
+the dynamics of these dependencies can change over time
+and can affect each other. Therefore, we design a natu-
+rally 2-dimensional recurrence that combines the state of
+each memory over time, capturing the inter-dependencies
+of dynamics across both time and variate. Let X
+=
+(x1
+. . .
+xV ) ∈RV ×T ×din be the input data. We use xt,v
+(resp. Mt,v) to refer to the state of the input (resp. memory)
+at time t in variate v. The update rule for each of the memory
+Figure 1: HYDRA at a glance. (a) Chunk-wise processing. The time series is divided into bT ×bV chunks; processed states
+are cached (green), the final state is passed forward (maroon), the active state is highlighted (purple), and future states are
+untouched (cream). (b) Intra-chunk 2D recurrence. Within a chunk, computation flows across time (red) and variate (yellow)
+axes. (c) Dual memory update. Closed-form updates for memory heads f
+M(1) and f
+M(2) capture cross-time (red), cross-variate
+(yellow), and cross-chunk (grey) dynamics.
+modules is defined as:
+log
+
+M(1)
+t,v
+
+= αt,v log
+
+M(1)
+t−1,v
+
+−ηt,v∇ℓ(M(1)
+t−1,v, xt,v)
+|
+{z
+}
+cross-time dynamic
++ βt,v log
+
+M(2)
+t−1,v
+
+−γt,v∇ℓ(M(2)
+t−1,v, xt,v)
+|
+{z
+}
+cross-variate dynamic
+,
+log
+
+M(2)
+t,v
+
+= θt,v log
+
+M(1)
+t,v−1
+
+−λt,v∇ℓ(M(1)
+t,v−1, xt,v)
+|
+{z
+}
+cross-time dynamic
++ µt,v log
+
+M(2)
+t,v−1
+
+−ωt,v∇ℓ(M(2)
+t,v−1, xt,v)
+|
+{z
+}
+cross-variate dynamic
+,
+where all parameters αt,v, ηt,v, βt,v, γt,v, θt,v, λt,v, µt,v, and
+ωt,v are input-dependent learnable parameters. Note that
+the input dependency here means that these parameters are
+a function of their corresponding input and can therefore
+adaptively change based on the context. We use linear layers
+to obtain such parameters, i.e., αt,v = Wαxv,t and similarly
+for other parameters of βt,v, γt,v, θt,v, λt,v, µt,v, and ωt,v.
+Gating
+This formulation provides a flexible information
+flow between cross-time and cross-variate information. As
+discussed earlier, while cross-variate dependencies and the
+flow of information between cross-time and cross-variate
+dimensions can be very effective in modeling multivariate
+time series data (Chen et al. 2023; Liu et al. 2023a; Behrouz,
+Santacatterina, and Zabih 2024a), this information is not al-
+ways useful and can degrade performance when the vari-
+ate is uncorrelated to other variates. Therefore, a powerful
+model needs to adaptively mix this information. In our de-
+sign, the parameters αt,v, ηt,v, βt,v, γt,v, θt,v, λt,v, µt,v, and
+ωt,v fully control all the information flow. For example, set-
+ting βt,v = γt,v = 0 can allow the model to filter out cross-
+variate information when a variate is irrelevant. Or when an
+input is OOD, if its temporal information is OOD, the model
+can set ηt,v = 0 and filter its effect on temporal memory,
+while setting γt,v ̸= 0 to still use its cross-variate informa-
+tion, if it is useful. Later in our experimental evaluations we
+show that using this flexible modeling of information flow
+can significantly improve the performance. Next, we provide
+two theoretical results to support the design of HYDRA:
+Theorem 1 (Expressivity of 2-Dimensional Design). HY-
+DRA can express full-rank kernels with O(1) parameters,
+while linear recurrent neural networks requires at least
+O(N) parameters to express a matrix with rank N.
+Theorem 2 (Recovering AR process). HYDRA can recover
+(seasonal) autoregressive processes in Equation (1).
+We provide the details of proofs in Appendix (B).
+4.2
+Fast Parallel Training
+As discussed earlier, even a single memory module with
+the update rule of Equation (EGD-MEMORY) is non-
+parallelizable, not considering the inter dependencies of two
+recurrence formula as we discussed for HYDRA. To this
+end, we extend our chunk-wise training (see Section 3.2)
+to 2-dimensional data. In the case of having a sequence as
+the input, we divide the sequence into some subsequences,
+however, having 2-dimensional data with 2-dimensional re-
+currence requires 2-dimensional chunks. To this end, let
+X = (x1
+. . .
+xV ) ∈RV ×T ×din be the input data, and bT
+and bV are two integers, indicating the size of chunks across
+time and variate. We divide X into T
+bT × V
+bV non-overlapping
+rectangulars of size bT × bV and use
+Si,j =
+
+
+
+x(i−1)bT +1,jbV
+. . .
+xibT ,jbV
+...
+...
+...
+x(i−1)bT +1,(j−1)bV +1
+. . .
+xibT ,(j−1)bV +1
+
+
+
+to refer to each chunk. Note that, we index variates in
+a bottom-up manner. Similar to the univariate case (Sec-
+tion 3.2), we calculate the gradients with respect to the
+Table 1: Average performance on long term forecasting tasks over four prediction lengths: {96, 192, 336, 720}. A lower MAE and MSE
+indicates a better prediction. The best performance is shown in bold, and the second-best is underlined. Full results are in Appendix.
+Models
+HYDRA (Ours)
+TimeMixer
+Simba
+ModernTCN
+iTransformer
+RLinear
+PatchTST
+Crossformer
+TiDE
+TimesNet
+DLinear
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+ETTm1
+0.343
+0.372
+0.381
+0.385
+0.383
+0.396
+0.351
+0.381
+0.407
+0.410
+0.414
+0.407
+0.387
+0.400
+0.513
+0.496
+0.419
+0.419
+0.400
+0.406
+0.403
+0.407
+ETTm2
+0.241
+0.298
+0.275
+0.323
+0.271
+0.327
+0.253
+0.314
+0.288
+0.332
+0.286
+0.327
+0.281
+0.326
+0.757
+0.610
+0.358
+0.404
+0.291
+0.333
+0.350
+0.401
+ETTh1
+0.394
+0.399
+0.447
+0.440
+0.398
+0.409
+0.404
+0.420
+0.454
+0.447
+0.446
+0.434
+0.469
+0.454
+0.529
+0.522
+0.541
+0.507
+0.458
+0.450
+0.456
+0.452
+ETTh2
+0.314
+0.372
+0.364
+0.395
+0.361
+0.377
+0.322
+0.379
+0.383
+0.407
+0.374
+0.398
+0.387
+0.407
+0.942
+0.684
+0.611
+0.550
+0.414
+0.427
+0.559
+0.515
+Exchange
+0.275
+0.361
+0.391
+0.453
+0.298
+0.363
+0.302
+0.366
+0.360
+0.403
+0.378
+0.417
+0.367
+0.404
+0.940
+0.707
+0.370
+0.413
+0.416
+0.443
+0.354
+0.414
+Traffic
+0.401
+0.269
+0.484
+0.297
+0.392
+0.264
+0.398
+0.270
+0.428
+0.282
+0.626
+0.378
+0.481
+0.304
+0.550
+0.304
+0.760
+0.473
+0.620
+0.336
+0.625
+0.383
+Weather
+0.210
+0.257
+0.240
+0.271
+0.211
+0.258
+0.224
+0.264
+0.258
+0.278
+0.272
+0.291
+0.259
+0.281
+0.259
+0.315
+0.271
+0.320
+0.259
+0.287
+0.265
+0.317
+ECL
+0.147
+0.244
+0.182
+0.272
+0.185
+0.274
+0.156
+0.253
+0.178
+0.270
+0.219
+0.298
+0.205
+0.290
+0.244
+0.334
+0.251
+0.344
+0.192
+0.295
+0.212
+0.300
+Table 2: Average performance on Ultra long-term forecasting tasks (MSE / MAE)
+Dataset
+Metric
+HYDRA
+MICN
+TimesNet
+PatchTST
+DLinear
+FiLM
+FEDformer
+Autoformer
+Informer
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+MSE
+MAE
+ECL
+720–1440
+0.4690
+0.5267
+1.0460
+0.7765
+0.6119
+0.5962
+0.8243
+0.6704
+0.4923
+0.5473
+0.4730
+0.5336
+0.4833
+0.5393
+1.4957
+0.9533
+0.5064
+0.5317
+1440–1440
+0.4589
+0.5203
+0.8262
+1.2207
+0.5720
+0.5712
+0.9053
+0.7328
+0.5146
+0.5615
+0.4849
+0.5429
+0.5142
+0.5571
+1.7873
+1.0283
+0.7247
+0.6920
+1440–2880
+0.5811
+0.5737
+2.8936
+1.3717
+0.7683
+0.6846
+1.1282
+0.8087
+0.8355
+0.7193
+0.6847
+0.6493
+3.9018
+1.5276
+1.2867
+0.8878
+0.6152
+0.5953
+Traffic
+720–1440
+0.1622
+0.2439
+0.2876
+0.3916
+0.1882
+0.2656
+0.1904
+0.2685
+0.1639
+0.2412
+0.1638
+0.2448
+0.2753
+0.3650
+0.3104
+0.4095
+0.7614
+0.6496
+1440–1440
+0.1499
+0.2465
+0.2905
+0.3923
+0.2081
+0.2712
+0.1917
+0.2764
+0.1590
+0.2411
+0.1602
+0.2437
+0.2848
+0.3681
+0.2970
+0.3999
+0.7375
+0.6414
+1440–2880
+0.1439
+0.2453
+0.2823
+0.3874
+0.1560
+0.2409
+0.1819
+0.2761
+0.1550
+0.2421
+0.1744
+0.2693
+0.2952
+0.3844
+0.3035
+0.3982
+0.9408
+0.7618
+ETTh1
+720–1440
+0.1327
+0.2856
+0.4640
+0.5836
+0.1391
+0.3049
+0.3708
+0.4906
+0.2952
+0.4370
+0.2949
+0.4388
+0.1768
+0.3409
+0.3298
+0.4741
+0.1378
+0.3051
+1440–1440
+0.1371
+0.3108
+0.5188
+0.6075
+0.1404
+0.3093
+0.4475
+0.5392
+0.2200
+0.3714
+0.3226
+0.4678
+0.1928
+0.3576
+0.3618
+0.5507
+0.1402
+0.3192
+1440–2880
+0.2574
+0.3815
+0.7591
+0.7215
+0.2732
+0.4094
+0.9617
+0.8072
+0.3773
+0.4794
+0.3624
+0.4705
+0.2627
+0.3754
+0.3177
+0.4733
+0.3495
+0.4111
+last state of each rectangular chunk, i.e., M(1)
+ibT ,jbV and
+M(2)
+ibT ,jbV . Hence, we revisit the recurrence in chunk Si,j as:
+˜
+M(1)
+t,v = αt,v ˜
+M(1)
+t−1,v−ηt,vu(1)
+t,v
+|
+{z
+}
+cross-time dynamic
++ βt,v ˜
+M(2)
+t−1,v−γt,vu(2)
+t,v
+|
+{z
+}
+cross-variate dynamic
+,
+˜
+M(2)
+t,v = θt,v ˜
+M(1)
+t,v−1−λt,vp(1)
+t,v
+|
+{z
+}
+cross-time dynamic
++ µt,v ˜
+M(2)
+t,v−1−ωt,vp(2)
+t,v
+|
+{z
+}
+cross-variate dynamic
+,
+where the above auxiliary variables and memory states
+are defined as u(1)
+t,v
+=
+∇ℓ(M(1)
+t′,v′, xt,v), u(2)
+t,v
+=
+∇ℓ(M(2)
+t′,v′, xt,v), p(1)
+t′′,v′′
+=
+∇ℓ(M(1)
+t,v, xt,v), p(2)
+t,v
+=
+∇ℓ(M(2)
+t′′,v′′, xt,v), in which (t′, v′) = ((i −1)bT , jbv) and
+(t′′, v′′) = (ibT , (j −1)bV ). Note that similar to the uni-
+variate setup, all parameters above can be computed simul-
+taneously in parallel, before processing this chunk and so the
+above process, similar to the univariate setup, can be written
+as a matrix multiplication (see Appendix (C) for the details).
+Experiments
+In this section, we present the experimental setup and re-
+sults that demonstrate the effectiveness and generality of
+HYDRA. We conduct extensive experiments across three ma-
+jor time series tasks: forecasting (ultra-long-term, long-term,
+and short-term horizons), classification, and anomaly detec-
+tion. To evaluate the model’s performance on these tasks,
+we tested on a variety of benchmark and real-world datasets.
+All experiments are designed to highlight the model’s abil-
+ity to generalize and adapt to different temporal patterns
+while capturing the inter-variate dependencies, showcasing
+the model’s capacity to effectively learn the relationships be-
+tween different variates over time.
+Setup
+We evaluate HYDRA on 28 publicly available mul-
+tivariate time series datasets spanning the full range of afore-
+mentioned tasks. To contextualize performance, HYDRA is
+compared against over 20 strong and widely adopted base-
+lines, including models based on recurrent and convolu-
+tional architectures, multilayer perceptrons, Transformers,
+and task-specific state-of-the-art methods. Our experiments
+follow standard evaluation protocols used in the time series
+literature. Task-specific evaluation metrics are applied, ad-
+hering to conventional interpretations where lower values in-
+dicate better performance for error-based metrics and higher
+values indicate better performance for accuracy-based met-
+rics. Full details on datasets, baselines, and evaluation met-
+rics are provided in Appendix (D).
+5.1
+Main Results
+(Ultra) Long-term Forecasting
+For long-term forecast-
+ing, we conduct experiments on a comprehensive suite of
+benchmark datasets (Zhou et al. 2021) , including Electric-
+ity, Traffic, Weather, Exchange Rate, and four settings of
+ETT datasets: ETTh1, ETTh2, ETTm1, and ETTm2. HY-
+DRA achieves state-of-the-art results across all benchmarks
+for long-term (see Table 1) and ultra long-term (see Ta-
+ble 2), consistently outperforming Transformer-based and
+state-space baselines. We attribute these gains to HYDRA’s
+2D update mechanism, which simultaneously captures de-
+pendencies across time and variates, endowing the model
+with richer temporal inductive biases than standard Trans-
+former blocks. Moreover, for ultra-long-term forecasting,
+HYDRA employs a learned gating mechanism that dynam-
+Table 3: Average performance on short-term forecasting tasks on the M4 dataset. A lower SMAPE, MASE, and OWA indicate
+better prediction. * is an abbreviation of the ”former” term.
+Models
+HYDRA ModernTCN TimeMixer PatchTST TimesNet N-HiTS N-BEATS∗ETS∗LightTS DLinear FED∗Stationary Auto∗Pyra∗
+Weighted
+Average
+SMAPE 11.651
+11.698
+11.723
+11.807
+11.829
+11.927
+11.851
+14.718 13.525
+13.639 12.840
+12.780
+12.909 16.987
+MASE
+1.535
+1.556
+1.559
+1.590
+1.585
+1.613
+1.599
+2.408
+2.111
+2.095
+1.701
+1.756
+1.771 3.265
+OWA
+0.819
+0.838
+0.840
+0.851
+0.851
+0.861
+0.855
+1.172
+1.051
+1.051
+0.918
+0.930
+0.939 1.480
+Table 4: Ablation study of HYDRA on six datasets (averaged over 5 runs).
+Model
+ETTh1
+ETTh2
+ETTm1
+ETTm2
+Weather
+Exchange
+MSE / MAE
+MSE / MAE
+MSE / MAE
+MSE / MAE
+MSE / MAE
+MSE / MAE
+Full HYDRA
+0.394 / 0.399
+0.314 / 0.399
+0.343 / 0.372
+0.241 / 0.298
+0.210 / 0.257
+0.275 / 0.364
+w/o cross-variate
+0.461 / 0.443
+0.457 / 0.481
+0.414 / 0.429
+0.318 / 0.369
+0.277 / 0.294
+0.335 / 0.410
+w/o input-dependent
+0.479 / 0.464
+0.392 / 0.421
+0.407 / 0.410
+0.341 / 0.370
+0.258 / 0.278
+0.360 / 0.403
+w/o Gating
+0.436 / 0.447
+0.382 / 0.402
+0.389 / 0.416
+0.314 / 0.376
+0.240 / 0.274
+0.290 / 0.395
+ically filters out irrelevant or stale historical information,
+focusing its capacity on the most informative signals and
+thereby delivering superior forecasting accuracy.
+Short-term Forecasting
+We evaluate HYDRA on Short-
+term forecasting tasks using the M4 benchmark dataset (Go-
+dahewa et al. 2021). The dataset includes time series from
+six different domains. As reported in Table 3, HYDRA de-
+livers strong predictive performance across a broad range
+of tasks, outperforming traditional and state-of-the-art deep
+learning baselines. Compared to the strongest baseline, HY-
+DRA achieves a 2.4% relative improvement in SMAPE and
+1.3% in MASE. This gain is attributed to inter-dependency
+connections and dual-memory architecture.
+Classification
+We evaluate HYDRA on ten diverse classi-
+fication benchmarks from the UEA archive (Bagnall et al.
+2018), covering domains such as biosignals, human activ-
+ity recognition, and speech. As shown in Figure 2, HYDRA
+consistently achieves good accuracy across all tasks, outper-
+forming a wide range of baselines, including classical mod-
+els, convolutional networks, and recent Transformer vari-
+ants. Notably, HYDRA surpasses methods that are tailored
+for either short or long sequences, demonstrating its robust-
+ness and adaptability. This effectiveness stems from HY-
+DRA’s chunk-wise recurrence, which enables efficient mod-
+eling of local and long-range dependencies.
+Anomaly Detection
+We also evaluate HYDRA on five
+widely-used anomaly detection datasets: SMD (Su et al.
+2019), SWaT (Mathur and Tippenhauer 2016), MSL (Hund-
+man et al. 2018a), SMAP (Hundman et al. 2018b), and PSM
+(Abdulaal, Liu, and Lancewicki 2021), which span domains
+such as service monitoring, space systems, and industrial
+control. HYDRA achieves the highest F1 scores across all
+benchmarks (Figure 2), surpassing Transformer-based and
+classical baselines. These gains come from HYDRA’s dual
+memory design, which tracks information over both time
+and variates, detecting subtle deviations from expected be-
+havior in both periodic and non-periodic data. By aggregat-
+ing across chunks, it enhances weak anomaly signals and
+avoids overfitting to frequent patterns, leading to better gen-
+eralization on rare or complex anomalies.
+Figure 2: Anomaly detection and classification results of HYDRA
+and baselines. Higher accuracy and F1-score indicate better perfor-
+mance. · in the Transformer-based models indicates an abbreviation
+of the “former” term.
+5.2
+Ablation Study
+As shown in Table 4, each component of HYDRA plays a
+critical role, with the full model achieving the lowest errors
+across all datasets. Removing the cross-variate module lim-
+its the model’s ability to learn inter-variable dependencies.
+Dropping input-dependent parameters reduces adaptability
+to varying inputs, while removing the gating mechanism
+weakens effective feature selection. These results clearly
+demonstrate the importance of each component.
+Conclusion
+We present EGD-MEMORY, a novel native multiplicative
+recurrent sequence model, that is motivated by the associa-
+tive memory perspective. Building upon EGD-MEMORY,
+we present HYDRA, a native 2-D model that uses two
+inter-connected memory module each of which responsible
+to learning the patterns across either time or variates. We
+present fast parallelizable training process for both models.
+Our experimental results supports the design of HYDRA, and
+shows its competitive performance.

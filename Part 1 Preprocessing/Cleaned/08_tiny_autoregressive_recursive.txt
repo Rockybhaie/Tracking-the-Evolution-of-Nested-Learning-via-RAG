@@ -1,0 +1,725 @@
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+TINY AUTOREGRESSIVE RECURSIVE MODELS
+Paulius Rauba
+University of Cambridge
+pr501@cam.ac.uk
+Claudio Fanconi
+University of Cambridge
+caf83@cam.ac.uk
+Mihaela van der Schaar
+University of Cambridge
+mv472@cam.ac.uk
+ABSTRACT
+Tiny Recursive Models (TRMs) have recently demonstrated remarkable perfor-
+mance on ARC-AGI, showing that very small models can compete against large
+foundation models through a two-step refinement mechanism that updates an in-
+ternal reasoning state z and the predicted output y. Naturally, such refinement is
+of interest for any predictor; it is therefore natural to wonder whether the TRM
+mechanism could be effectively re-adopted in autoregressive models. However,
+TRMs cannot be simply compared to standard models because they lack causal
+predictive structures and contain persistent latent states that make it difficult to
+isolate specific performance gains. In this paper, we propose the Autoregressive
+TRM and evaluate it on small autoregressive tasks. To understand its efficacy, we
+propose a suite of models that gradually transform a standard Transformer to a Tiny
+Autoregressive Recursive Model in a controlled setting that fixes the block design,
+token stream, and next-token objective. Across compute-matched experiments on
+character-level algorithmic tasks, we surprisingly find that there are some two-level
+refinement baselines that show strong performance. Contrary to expectations, we
+find no reliable performance gains from the full Autoregressive TRM architecture.
+These results offer potential promise for two-step refinement mechanisms more
+broadly but caution against investing in the autoregressive TRM-specific model as
+a fruitful research direction.
+INTRODUCTION
+Step Embedding
+( )
+Inner loop
+Inner loop
+Inner loop
+Inner loop
+Solution
+Update (
+)
+Solution
+Update (
+)
+Solution
+Update (
+)
+Solution (
+)
+12 Layers, 1 block each
+1 Block, 12 recurrent steps
+1 outer loop, 4 inner loops of 3 updates = 12 blocks
+12
+Normalized block evaluations
+Standard Deep Transformer
+(Unique Parameters)
+Universal Transformer
+(Recurrent, Tied Parameters)
+Tiny Recursive Model
+(Hierarchical, Dual-Stream)
+Figure 1: Compute placement at fixed block-pass bud-
+get. Three autoregressive decoders execute the same com-
+pute (12 decoder-block evaluations) but allocate it differ-
+ently: (left) Deep Transformer: 12 untied layers, (middle)
+Universal Transformer: one shared block unrolled for 12
+recurrent steps, with step embeddings, and (right) Tiny
+Recursive Model: hierarchical dual-stream refinement us-
+ing multiple inner updates before each solution update. We
+investigate which allocation yields the best generalization
+per block evaluation.
+A common way to improve performance
+in autoregressive Transformers is to “in-
+crease compute”. Yet, under a fixed
+decoder-block template, the same bud-
+get of decoder-block evaluations can be
+allocated in non-equivalent ways: (i) un-
+tied depth (distinct layers), (ii) tied re-
+current depth (reusing a shared block
+across steps), or (iii) within-token refine-
+ment (multiple internal updates before
+emitting next-token logits), as just a few
+examples. These choices match com-
+pute in block passes but differ in param-
+eter sharing, state evolution, and how
+gradients supervise intermediate compu-
+tation (see Fig. 1).
+Recent hierarchical refinement mod-
+els motivate within-token refinement
+as latent multi-step computation, i.e.
+instead of emitting intermediate to-
+kens, the model iteratively refines in-
+ternal latents before producing log-
+its Wang et al. (2025); Jolicoeur-
+Martineau (2025).
+The TRM model
+arXiv:2603.08082v1  [cs.LG]  9 Mar 2026
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+(a) No Recurrence
+Dense Transformer
+H0
+H1
+H2
+HK
+fθ
+fθ
+K iterations
+Readout: HK
+(b) Single Stream
+Universal Transformer
+H0
+H1
+H2
+HK
+Σ
+w0
+wK
+Readout: P
+k wkHk
+(c) Two-Stream
+Dual Universal Transformer
+Y 0
+Y 1
+Y K
+Σ
+Z0
+Z1
+ZK
+Readout: P
+k wkY k
+(d) Two Stream with Q-Halt
+Autoregressive TRM
+Y 0
+Y 1
+Z0
+Z1
+ZL
+L inner steps
+×H
+Readout: Y (H)
+States:
+Hidden H
+Solution Y
+Auxiliary Z
+Input X
+Edges:
+Transition fθ
+Conditioning
+Figure 2: Compute placement architectures. (a) Single hidden-state stream with final-iterate
+readout. (b) Adaptive halting with weighted readout across all iterates. (c) Two-stream factorization:
+solution Y and auxiliary Z with cross-conditioning. (d) Nested hierarchy: L inner refinements of Z
+per outer update of Y , repeated H times.
+shows particularly strong results due to its strong performance in the ARC-AGI challenge suite
+relative to standard LLMs1. Implicitly, this can be seen as a “token-level reasoning” hypothesis,
+where reasoning here is used loosely as simply another word for computation. Therefore, if this
+token-level reasoning hypothesis holds, then under matched compute, allocating iteration within
+each decoding step should improve generalization per block evaluation by enabling intra-step self-
+correction prior to committing a token.
+Can we directly test this hypothesis in other settings, such as the autoregressive setting? To understand
+why and when it works, we would require isolating the specific mechanism that the TRM adopts
+under matched compute. We therefore take compute placement as the object of study and ask:
+Given a fixed autoregressive decoder block template and a fixed next-token objective, how should
+iterative computation be allocated to maximize generalization per unit compute? We answer this in a
+controlled autoregressive family that fixes the token stream and next-token loss, enforces standard
+causal masking and KV-cache semantics, uses an identical decoder block, and excludes routing and
+token-stream modifications. Within this family, architectures correspond to different unrollings of the
+same block template.
+Findings.
+Across compute-matched experiments on character-level algorithmic tasks (addition,
+copying, reversing), untied depth and a flat two-stream recurrent baseline yield the strongest general-
+ization per block evaluation. The autoregressive TRM model, contrary to expectations, provides no
+consistent benefit. In fact, in most experiments, the performance degrades sharply. This suggests
+that under autoregressive setups, maintaining an inner refinement loop does not yield benefits given
+equivalent compute. However, we also recognize these are early results on “tiny” models in smaller
+data regimes; and these could, in principle, change, in not-so-tiny autoregressive recursive models.
+­
+Contributions. (i) We formalize compute placement for autoregressive Transformers un-
+der a fixed block template and introduce a controlled ladder that isolates tying, step
+conditioning, halting/readout, and hierarchical refinement. (ii) We derive an autoregres-
+sive projection of TRM-style hierarchical refinement that preserves causal masking and
+removes cross-call latent carry which allow for compute-matched comparisons without
+token-stream changes.
+(iii) We empirically show that at matched block-pass budgets,
+untied depth and flat two-stream recurrence dominate, while token-internal hierarchical
+refinement is not a reliable route to improved autoregressive generalization.
+BACKGROUND
+Preliminaries (autoregressive setting).
+Let V be a finite vocabulary and x = (x1, . . . , xT ) ∈VT
+a length-T sequence. We model
+pθ(x) =
+T
+Y
+t=1
+pθ(xt | x<t),
+x<t = (x1, . . . , xt−1),
+1Despite its impressive results, two key differences in the setup are that the TRM was trained as a supervised
+learning model directly on available data; and used extensive data augmentation for ARC-AGI
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+and train by maximum likelihood,
+L(θ) = −
+T
+X
+t=1
+log pθ(xt | x<t).
+At depth ℓ, hidden states are H(ℓ) ∈RT ×d with rows h(ℓ)
+t
+∈Rd, and H(0) = Embed(x) + Pos(x)
+(optionally plus other additive signals). We use causal language modelling, enforcing causality with
+an attention mask that restricts each position to attend only to earlier tokens.
+2.1
+TRANSFORMERS FROM A COMPOSITIONAL POINT OF VIEW
+Standard Transformers (Vaswani et al., 2017) implement x<t 7→pθ(xt | x<t) by stacking L residual
+blocks. Each block ℓ∈{0, . . . , L −1} applies fθℓ: RT ×d →RT ×d (attention–MLP), giving
+H(ℓ+1) = fθℓ
+
+H(ℓ)
+,
+H(L) = fθL−1 ◦· · · ◦fθ0
+
+H(0)
+.
+Equivalently, a Transformer repeatedly applies a block template, composing L distinct transformations
+in sequence. This fixed-depth, acyclic graph is easy to optimize and parallelize, but hard-codes a
+uniform compute budget: each token receives exactly L block applications. Any additional iterative
+computation must therefore be realized indirectly (e.g., via extra tokens, a common technique for
+test-time scaling) or by modifying the architecture to allocate compute differently.
+2.2
+UNIVERSAL TRANSFORMERS
+Universal Transformers (UTs) (Dehghani et al., 2018) replace untied depth with recurrent depth by
+repeatedly applying a single block fθ:
+H(k+1) = fθ(H(k)),
+k = 0, 1, . . . , K −1,
+with H(0) as above. For fixed K, this is a depth-K Transformer with full parameter tying, increasing
+computational steps without increasing parameters and interpreting recurrence as iterative refinement
+of a shared latent state. Because tying makes refinement steps ambiguous, UTs inject a step encoding
+so fθ can condition on k.
+UTs are typically combined with Adaptive Computation Time (ACT) (Graves, 2016), which adds
+a halting mechanism and forms outputs via a weighted accumulation of intermediate states with
+a ponder-style penalty. In principle this enables non-uniform compute across tokens. In practice,
+refinement is still coupled to a global recurrent mechanism (tokens share the same update sequence
+until halting), and predictions come from an aggregate over iterates rather than a final refined state.
+Thus, while UTs show recurrent depth can be effective, they do not resolve our finer question: under
+a fixed autoregressive decoder block, where does iteration improve generalization per unit compute?
+2.3
+TINY RECURSIVE MODELS: AN EXTENSION OF UT
+Tiny Recursive Models (TRMs) (Jolicoeur-Martineau, 2025) have drawn attention because a 7M-
+parameter TRM reportedly generalizes well on ARC-AGI (e.g., 45% on ARC-AGI-1 and 8% on
+ARC-AGI-2 with heavy augmentation and test-time compute), suggesting recursive depth can support
+structured reasoning with small parameter budgets.
+TRMs can be seen as extending UTs by keeping a tied refinement operator but changing what is refined
+and how it is read out. They decompose state into a fixed input stream X = Embed(x) + Pos(x), a
+solution stream Y , and an auxiliary reasoning stream Z. With a shared block fθ, Z is refined while
+conditioning on X and the current solution, and Y is updated through the refined Z:
+Z(k,i+1) = fθ
+ X + Y (k) + Z(k,i)
+,
+i = 0, . . . , n −1,
+Y (k+1) = fθ
+ Y (k) + Z(k,n)
+.
+This induces a hierarchical schedule: multiple inner refinements of Z precede each update of Y
+(repeated over an outer loop). TRM halting also differs from ACT (Graves, 2016): instead of a convex
+combination of iterates with a ponder penalty, TRMs use a binary halt head on the solution stream
+and output the terminal iterate Y (K).
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+We use TRMs here for a narrower purpose: they provide a clean way to place iterative computation
+while keeping the block and objective fixed. However, in the original implementation, TRMs are
+introduced as supervised learning solvers, whereas autoregressive decoding must emit next-token
+distributions at every step. Emitting explicit “thinking” tokens would change the token stream and
+thus the learning problem, so instead we adapt TRM refinement to operate within a masked decoder
+step: for a fixed prefix, we iteratively refine the hidden state producing next-token logits without extra
+tokens or routing (Sec. 3). Figure 2 summarizes the architectures.
+AUTOREGRESSIVE TOKEN-LEVEL REFINEMENT
+We return to the central question: under matched compute, how should iterative computation be
+allocated within an autoregressive decoder? Existing approaches increase untied depth, reuse a
+block as recurrent depth (Dehghani et al., 2018), or add within-step refinement intended to resemble
+“token-level reasoning” (Wang et al., 2025; Chen et al., 2025). However, these proposals are rarely
+directly comparable: they often change the token stream (e.g., scratch/pause tokens) (Wei et al.,
+2022; Nye et al., 2021; Zelikman et al., 2022), add conditional capacity via routing (Shazeer et al.,
+2017; Lepikhin et al., 2020; Fedus et al., 2022), or alter the inference interface (e.g., solver-style
+refinement) (Bai et al., 2019), confounding where supervision acts. Methods that “think” by emitting
+extra tokens may help (Wei et al., 2022; Nye et al., 2021; Zelikman et al., 2022), but they also
+change the modelling problem by changing the generated sequence. Here we fix the token stream
+and next-token objective, and ask whether extra computation can be organized internally under strict
+autoregressive semantics.
+Within this controlled scope, TRMs are of interest because they represent an extreme compute
+placement: refining a structured latent state multiple times within a single decoding step. If token-
+internal refinement yields gains in our controlled autoregressive family (Wang et al., 2025; Chen et al.,
+2025), the autoregressive TRM model ought to show empirical performance gains. The mismatch is
+that TRMs are proposed as supervised solvers with bidirectional attention and cross-call state carry.
+This section adapts TRM-style refinement to autoregressive decoding and uses it to study compute
+placement in autoregressive Transformers.
+3.1
+COMPUTE PLACEMENT AND WHY TRM-STYLE IS THE RIGHT STRESS TEST
+Autoregressive compute can be increased in non-equivalent ways: as untied depth (distinct blocks),
+tied recurrent depth (reapplying a shared block) (Dehghani et al., 2018), or within-step refinement
+(multiple internal updates before logits) (Wang et al., 2025; Jolicoeur-Martineau, 2025). These
+mechanisms can match block evaluations per token, but they differ in the iterated state and in how
+predictions are read out.
+This motivates a pragmatic taxonomy used throughout the paper. Single-stream variants differ
+by weight tying, step disambiguation, and whether intermediate iterates contribute via a weighted
+readout (Dehghani et al., 2018; Graves, 2016; Banino et al., 2021). Multi-stream variants (Wang
+et al., 2025; Jolicoeur-Martineau, 2025) decompose the latent state into asymmetric components
+(e.g., solution and auxiliary streams). This is a form of nested scheduling in which the auxiliary
+stream undergoes multiple inner refinements before each solution update2. A final axis is the
+readout: aggregate over iterates or use a terminal iterate (Graves, 2016; Banino et al., 2021; Jolicoeur-
+Martineau, 2025).
+3.2
+TWO CHALLENGES TO OVERCOME
+TRMs are not directly compatible with strict autoregressive decoding for two reasons. ▶Challenge
+1 (causality). Solver-style TRMs use bidirectional attention, so an update at position i can depend
+on future positions j > i. We enforce strict autoregressive semantics by applying a causal mask.
+▶Challenge 2 (cross-call carry). TRMs maintain a persistent latent carry that is reset only upon
+halting. This can leak information across prefixes: computation performed under earlier contexts can
+2This contrasts with alternative nesting mechanisms that focus on parameter-level nesting (Rauba & van der
+Schaar, 2026; Behrouz et al., 2025)
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+influence later logits beyond the explicit conditioning set x<t. We remove this by re-initializing the
+TRM latent streams on every forward pass, so logits at step t depend only on x<t within that call.
+These modifications isolate token-internal refinement within a fixed compute budget. For a given
+block-pass budget, the nested schedule simply partitions block evaluations across inner Z refinements
+and outer Y updates. Consequently, any difference from single-stream recurrence cannot be attributed
+to future leakage, cross-call state, routing, or token-stream changes (Shazeer et al., 2017; Lepikhin
+et al., 2020; Fedus et al., 2022; Wei et al., 2022; Nye et al., 2021; Zelikman et al., 2022). In our
+compute-placement ladder (Sec. 4), this autoregressive TRM-style projection is the extreme token-
+internal rung; if it fails to improve generalization at equal compute, it provides a strong negative test
+for within-step refinement in this setting.
+MECHANISTIC DECOMPOSITION OF ITERATIVE COMPUTATION
+Model
+Tie
+Step
+ACT
+2S
+Nest
+Q-halt
+Dense Transformer
+✗
+✗
+✗
+✗
+✗
+✗
+Iterative Transformer
+✓
+✗
+✗
+✗
+✗
+✗
+Iterative Step Transformer
+✓
+✓
+✗
+✗
+✗
+✗
+Universal Transformer
+✓
+✓
+✓
+✗
+✗
+✗
+Dual UT
+✓
+✓
+✓
+✓
+✗
+✗
+Dual Nested UT
+✓
+✓
+✓
+✓
+✓
+✗
+Autoregressive TRM
+✓
+✓
+✓/ ✗
+✓
+✓
+✓/ ✗
+Table 1: Progressive deltas (single-column ladder). Each
+row adds exactly one mechanism relative to the previous row.
+Tie=weight tying; Step=step embeddings; ACT=Graves ACT-
+style halting; 2S=two-stream (y, z); Nest=hierarchical H × L
+loop; Q-halt=TRM-style binary halting. Note: We have used
+terms that best describe the underlying model architecture; for
+instance, Autoregressive TRM is best described for what it is
+doing, while the non-autoregressive version is called TRM.
+We study compute placement in autore-
+gressive Transformers:
+modifying how
+computation is allocated while holding
+fixed tokenization, the next-token objec-
+tive, causal attention/KV-cache semantics,
+and the decoder-block template (attention–
+MLP with residual/norm), with no routing
+and no token-stream modifications. This
+controlled setting isolates where iteration
+matters.
+We define three criteria that we think a
+study with high internal validity should
+therefore satisfy. ▶Controlled family:
+fixed token stream, objective, masking, and
+block structure, so variants differ only in
+iteration placement; ▶Axis isolation: vary
+one mechanism at a time (e.g., tying, halt-
+ing, readout), enabling causal attribution;
+▶Compute normalization: match compute by counting block evaluations rather than parameters.
+Many existing approaches vary multiple axes at once: standard Transformers use untied depth, single-
+stream state, and final-state readout; UTs add weight tying and step embeddings; ACT and PonderNet
+add adaptive halting with weighted accumulation; TRMs add state decomposition, hierarchical
+iteration, and binary halting with terminal readout; and Deep Equilibrium Models replace explicit
+unrolling with implicit fixed-point solvers, changing both iteration and training dynamics. These
+bundled changes make mechanistic attribution difficult.
+How to interpret Table 1. The table defines the controlled compute-placement ladder: each row
+adds exactly one mechanism while holding fixed the token stream and next-token objective, causal
+masking/KV-cache semantics, and the decoder-block template fθ. Columns indicate: ▶TIE: reuse
+the same parameters across the C block passes (tied recurrence) vs. distinct θℓ(untied depth); ▶STEP:
+inject a step signal ek so a tied block can condition on iteration index; ▶ACT: Graves-style adaptive
+computation time, i.e. halting with weighted readout over iterates H(k) (run in a compute-matched
+regime when required); ▶2S: replace single-stream H with two-stream (Y, Z) conditioned on the
+fixed input stream X = Embed(x) + Pos(x); ▶NEST: refine Z for L inner steps before each Y
+update (repeated H times), moving compute within a decoding step without changing the token
+stream; ▶Q-HALT: replace ACT-style accumulation with TRM-style binary halting and terminal-
+iterate readout (logits from the final solution iterate). Under compute normalization (Sec. B), all rows
+execute the same number of block evaluations per forward pass, so differences can be attributed to
+the single added mechanism.
+EVALUATION
+Evaluation methodology. We evaluate a controlled ladder of seven autoregressive architectures that
+differ only in compute placement, while holding fixed the token stream, next-token objective, causal
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+0%
+25%
+50%
+75%
+100%
+Dense Transformer
+Universal Transformer
+Autoregressive TRM
+80%
+66%
+12%
+Addition
+0%
+25%
+50%
+75%
+100%
+Character Accuracy (L=10)
+100%
+100%
+11%
+Copy
+0%
+25%
+50%
+75%
+100%
+100%
+100%
+10%
+Reverse
+Model Performance Across Tasks
+Figure 3: Model performance across tasks. Character accuracy (length 10) on Addition, Copy, and
+Reverse for three architectures: Dense Transformer, Universal Transformer (UT), and autoregressive
+TRM. Copy and Reverse are solved by the Dense Transformer and UT (100% accuracy), while
+Addition remains more difficult and separates these two models (80% vs. 66%). The autoregressive
+TRM performs poorly on all three tasks, reaching only 12%, 11%, and 10% accuracy, respectively.
+masking/KV-cache semantics, and an identical decoder-block template (Pre-Layer-Normalization
+causal self-attention + GELU MLP with residuals), with no routing and no token-stream modifications.
+Compute is normalized by directly matching the number of decoder-block evaluations per forward
+pass (“block passes”) to a fixed budget C, configuring each model’s unrolling so that Dense uses
+C untied layers, tied/step-aware variants reuse a shared block for C steps (optionally with step
+embeddings), ACT-style UT variants are run in a full-compute mode (no early halting) to keep realized
+block passes fixed, and two-stream / nested variants subdivide the C passes across reasoning/solution
+updates (and inner refinements when nested). All models are trained under identical optimization
+and data conditions (procedurally generated character-level algorithmic sequences; next-token cross-
+entropy with loss on outputs only), and are evaluated on Copy, Reverse, and Addition with out-of-
+distribution length scaling using greedy decoding. Our evaluation metrics include sequence exact
+match, character accuracy, and position-wise accuracy by output quartiles to localize where failures
+accumulate. We do not compute the sensitivity of the autoregressive samplers to input perturbations
+(Rauba et al., 2025) because we only care about exactly predicting the single ground-truth answer
+given the input sequence.
+5.1
+PERFORMANCE UNDER EQUAL COMPUTE
+RQ1. Under matched block-pass compute, which compute placements yield the strongest perfor-
+mance, and which tasks most strongly differentiate these choices?
+Result
+Figure 3 compares three primary architectures on Addition, Copy, and Reverse. The Dense
+Transformer and UT both achieve perfect performance on Copy and Reverse, indicating that these
+two tasks are easy for these models at the tested sequence length. Addition is more demanding: the
+Dense Transformer reaches 80% character accuracy, while the UT reaches 66%. By contrast, the
+autoregressive TRM performs poorly on every task, with accuracy near 10% throughout, which is
+close to chance-level behavior at the character level3.
+Interpretation.
+The main pattern is that task demands interact strongly with architectural con-
+straints. Copy and Reverse mainly test whether the model can preserve or reorder information already
+present in the input. Under the present training and evaluation setup, both the Dense Transformer
+and UT have sufficient capacity to do this reliably. Addition has a different structure: correct output
+requires intermediate state updates that remain consistent across positions, because local mistakes can
+propagate through the sequence via carry-like dependencies. This makes Addition a more sensitive
+test of whether the architecture can sustain a stable internal computation over multiple steps. The gap
+between the Dense Transformer and UT therefore shows that these two models, although both strong
+on Copy and Reverse, differ in how effectively they support that computation. The autoregressive
+TRM fails even on Copy and Reverse, which suggests that its difficulty is more basic: in this setting,
+it does not learn a robust input-output mapping for any of the three tasks.
+3The associated github repo can be found at https://github.com/pauliusrauba/autoregressive-TRM
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+­
+Takeaway. Copy and Reverse distinguish the autoregressive TRM from the other two
+models, while Addition further separates the Dense Transformer from the UT. The Dense
+Transformer performs best overall, the UT is strong but weaker on Addition, and the
+autoregressive TRM does not generalize successfully on any task shown.
+5.2
+ERROR CONCENTRATION AND LEARNING BOTTLENECKS
+RQ2. Where do errors concentrate in autoregressive decoding, and when does training succeed
+(or fail) to resolve the final dependency under different compute placements?
+Q1
+Q2
+Q3
+Q4
+0%
+25%
+50%
+75%
+100%
+Position Accuracy
+96%
+Non-Recursive
+Q1
+Q2
+Q3
+Q4
+Output Position (Early -> Late)
+37%
+10%
+Single Stream
+Q1
+Q2
+Q3
+Q4
+70%
+8%
+Dual Stream
+Addition Task: Accuracy by Output Position
+Dense Transformer
+Iterative Transformer
+Iterative Step Transformer
+Universal Transformer
+Dual UT
+Dual Nested UT
+Autoregressive TRM
+Figure 4: Addition: accuracy stability by output position. Character accuracy by output quartile.
+Dense remains high and nearly flat across positions, while several single-stream recurrent models
+exhibit sharp late-position collapse (Q4 ≈8–10%). Dual UT largely avoids this collapse.
+Results.
+Figure 4 shows that addition errors are strongly position-structured. Dense is high and
+nearly flat across all quartiles, indicating stable decoding performance. In contrast, single-stream
+recurrent variants degrade sharply at late positions: Iterative, Iterative Step, and UT fall to roughly
+≈10%, ≈9%, and ≈8% in Q4, despite substantially higher accuracy earlier in the output. Dual UT
+largely avoids this late-position collapse, remaining comparatively stable across positions.
+1000
+2000
+3000
+4000
+5000
+Training Steps
+0%
+25%
+50%
+75%
+100%
+Last Character Accuracy
+Bottleneck Overcome
+Dense Transformer
+Dual UT
+1000
+2000
+3000
+4000
+5000
+Training Steps
+FLAT
+Bottleneck Not Overcome
+Dual Nested UT
+Autoregressive TRM
+Iterative Transformer
+Iterative Step Transformer
+Universal Transformer
+Learning Bottleneck in Last-Character Prediction
+Single Stream
+Dual Stream
+Figure 5: Addition: training bottleneck on the
+final character. Last-character accuracy over train-
+ing. Only Dense and Dual UT reliably overcome
+the bottleneck; the remaining compute placements
+stay flat near chance.
+Figure 5 shows the corresponding training-time
+picture. Only Dense and Dual UT reliably break
+through the final-character bottleneck, with last-
+character accuracy rising sharply and reach-
+ing high values by the end of training.
+All
+other architectures remain essentially flat over
+the full training horizon: single-stream recur-
+rent variants (Iterative, Iterative Step, UT) do
+not break through, and nested/terminal variants
+(Dual Nested UT and the Autoregressive TRM)
+also stay near chance.
+Interpretation.
+Together, these plots point to
+addition requiring to learn and maintain a glob-
+ally consistent carry-like summary across the
+decoding trajectory. Early output positions can
+often be predicted using local regularities (e.g.,
+digitwise patterns) that do not require full con-
+sistency, so several models appear competent in
+Q1–Q3. The final part of the output is different:
+it is maximally sensitive to upstream inconsis-
+tencies, so small representational errors that are tolerable earlier accumulate and surface as a sharp
+drop in Q4. We interpret this in that architectures that remain flat on last-character accuracy never
+acquire the core global dependency, even if they learn partial heuristics that help earlier positions.
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+­
+Takeaway.
+On addition, errors concentrate late because the final dependency is least
+tolerant to upstream inconsistency. Whether training overcomes this bottleneck depends
+strongly on compute placement: Dense and flat two-stream recurrence (Dual UT) cross
+it, while single-stream recurrence and nested/terminal refinement typically do not.
+5.3
+LEARNING DYNAMICS
+RQ3. Do different placements of the same compute budget merely shift final accuracy, or do they
+change how solutions are learned over training?
+Result.
+Figure 6 shows qualitatively different learning trajectories under compute matching. Dense
+exhibits a long plateau followed by a late, sharp jump to high accuracy. Single-stream tied variants
+(Iterative, Iterative Step, UT) improve more gradually and plateau well below Dense. Dual UT accel-
+erates earlier and reaches a higher plateau than single-stream recurrence. In contrast, nested/terminal
+variants (Dual Nested UT, Autoregressive TRM) remain low throughout, indicating failure to enter the
+high-accuracy regime. We find similar results in our further experiments, i.e. Dense models improve
+early positions and only later on late positions, whereas Dual UT’s late positions rise more slowly and
+level off lower. However, we notice that the exact behavior is very sensitive to the hyperparameter
+and training setup used.
+1000
+2000
+3000
+4000
+5000
+0%
+25%
+50%
+75%
+100%
+Character Accuracy (L=10)
+Non-Recursive
+Dense Transformer
+1000
+2000
+3000
+4000
+5000
+Training Step
+Single Stream
+Iterative Transformer
+Iterative Step Transformer
+Universal Transformer
+1000
+2000
+3000
+4000
+5000
+Dual Stream
+Dual UT
+Dual Nested UT
+Autoregressive TRM
+Learning Dynamics: How Models Learn Over Training
+Figure 6: Learning dynamics under compute
+matching (addition). Held-out character accuracy
+(length L=10) over training steps. Dense shows
+a late, abrupt transition; single-stream tying im-
+proves gradually but plateaus; Dual UT accelerates
+earlier; nested/terminal variants remain low.
+Interpretation.
+These dynamics are consis-
+tent with a shift from partial heuristics to an
+internal computation that resolves the global de-
+pendency in addition. Early positions admit lo-
+cal regularities, so models can improve without
+learning globally consistent carry propagation;
+high accuracy requires maintaining a carry-like
+summary that remains aligned with the read-
+out across decoding. Untied depth may ease
+learning via stage-wise specialization, and flat
+two-stream recurrence may help by separating
+auxiliary computation from the solution inter-
+face. By contrast, nested refinement with termi-
+nal readout weakens credit assignment to early
+inner-loop steps, creating an optimization bar-
+rier that training often fails to cross.
+­
+Takeaway.
+Under matched compute, compute placement changes learning dynamics:
+Dense and (to a lesser extent) Dual UT cross the final-dependency barrier, whereas single-
+stream tying often stalls and nested/terminal refinement frequently fails to learn it at all.
+DISCUSSION
+Implications for “latent reasoning” claims in autoregressive models. Our results suggest that,
+under a strict next-token objective with causal masking, dual stream architectures can result in
+superior generalization, but the autoregressive TRM model does not exhibit such behavior. We
+posit that this might be attributable to either credit-assignment mechanisms intenral within different
+architectures or improved representation learning within a compute budget that can be exploited early
+on in the training. Importantly, we find that such “dual stream” autoregressive settings can indeed
+hold promise, but, at least in the small data algorithmic regime, the autoregressive TRM model does
+not seem to be a worthwhile research pursuit. We would be interested to see fruitful work which
+extends this idea further to not-so-tiny autoregressive settings or more complicated settings that
+require higher levels abstraction as a part of the solution space.
+Impact Statement
+This work has impact on at least several areas of machine learning and artificial
+intelligence, none of which we think is important to explicitly highlight.
+Published at ICLR 2026 Workshop on AI with Recursive Self-Improvement.
+Acknowledgements
+We thank reviewers for their feedback and comments. This work was sup-
+ported by Azure sponsorship credits granted by Microsoft’s AI for Good Research Lab.

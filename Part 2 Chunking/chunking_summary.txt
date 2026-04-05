@@ -1,0 +1,73 @@
+CHUNKING STRATEGY COMPARISON
+NLP with Deep Learning — Assignment 3
+=================================================================
+
+Strategy A_fixed: Fixed Character Splitting  (512 chars / 50 overlap)
+  Total chunks   : 2007
+  Avg chunk size : 467 characters
+  Processing time: 0.1s
+  Output file    : corpus_A_fixed.pkl  (1100.9 KB)
+
+  Per-paper breakdown:
+    00_nested_learning_original.txt                     364 chunks  avg=467c
+    03_fast_weight_programming.txt                      189 chunks  avg=459c
+    04_end_to_end_ttt_long_context.txt                  157 chunks  avg=470c
+    05_dynamic_nested_hierarchies.txt                    74 chunks  avg=467c
+    06_crad_hope_anomaly_detection.txt                  126 chunks  avg=472c
+    08_tiny_autoregressive_recursive.txt                 70 chunks  avg=473c
+    10_hydra_dual_exponentiated_memory.txt               79 chunks  avg=486c
+    11_beyond_ttt_optimal_control.txt                   118 chunks  avg=465c
+    13_allmem_long_context.txt                           77 chunks  avg=466c
+    14_vision_transformers_never_stop.txt                75 chunks  avg=456c
+    15_msa_memory_sparse_attention.txt                  118 chunks  avg=470c
+    16_prompt_injection_nested_learning.txt             171 chunks  avg=471c
+    17_memory_caching_rnns.txt                          110 chunks  avg=464c
+    22_learning_to_learn_at_scale.txt                    51 chunks  avg=479c
+    26_attention_not_retention.txt                      228 chunks  avg=456c
+
+Strategy B_recursive: Recursive Character Splitting  (400 chars / 80 overlap)
+  Total chunks   : 2753
+  Avg chunk size : 354 characters
+  Processing time: 0.1s
+  Output file    : corpus_B_recursive.pkl  (1201.3 KB)
+
+  Per-paper breakdown:
+    00_nested_learning_original.txt                     495 chunks  avg=352c
+    03_fast_weight_programming.txt                      258 chunks  avg=345c
+    04_end_to_end_ttt_long_context.txt                  214 chunks  avg=355c
+    05_dynamic_nested_hierarchies.txt                   103 chunks  avg=350c
+    06_crad_hope_anomaly_detection.txt                  177 chunks  avg=363c
+    08_tiny_autoregressive_recursive.txt                 96 chunks  avg=358c
+    10_hydra_dual_exponentiated_memory.txt              121 chunks  avg=369c
+    11_beyond_ttt_optimal_control.txt                   160 chunks  avg=357c
+    13_allmem_long_context.txt                          103 chunks  avg=359c
+    14_vision_transformers_never_stop.txt               102 chunks  avg=344c
+    15_msa_memory_sparse_attention.txt                  159 chunks  avg=362c
+    16_prompt_injection_nested_learning.txt             226 chunks  avg=363c
+    17_memory_caching_rnns.txt                          151 chunks  avg=351c
+    22_learning_to_learn_at_scale.txt                    78 chunks  avg=367c
+    26_attention_not_retention.txt                      310 chunks  avg=343c
+
+Strategy C_semantic: Semantic Chunking  (percentile=70 / all-MiniLM-L6-v2)
+  Total chunks   : 1455
+  Avg chunk size : 625 characters
+  Processing time: 10.4s
+  Output file    : corpus_C_semantic.pkl  (1025.5 KB)
+
+  Per-paper breakdown:
+    00_nested_learning_original.txt                     244 chunks  avg=673c
+    03_fast_weight_programming.txt                      118 chunks  avg=720c
+    04_end_to_end_ttt_long_context.txt                  137 chunks  avg=524c
+    05_dynamic_nested_hierarchies.txt                    59 chunks  avg=563c
+    06_crad_hope_anomaly_detection.txt                  101 chunks  avg=572c
+    08_tiny_autoregressive_recursive.txt                 52 chunks  avg=613c
+    10_hydra_dual_exponentiated_memory.txt               66 chunks  avg=562c
+    11_beyond_ttt_optimal_control.txt                    91 chunks  avg=574c
+    13_allmem_long_context.txt                           50 chunks  avg=700c
+    14_vision_transformers_never_stop.txt                59 chunks  avg=561c
+    15_msa_memory_sparse_attention.txt                   85 chunks  avg=637c
+    16_prompt_injection_nested_learning.txt             114 chunks  avg=693c
+    17_memory_caching_rnns.txt                           67 chunks  avg=724c
+    22_learning_to_learn_at_scale.txt                    43 chunks  avg=561c
+    26_attention_not_retention.txt                      169 chunks  avg=603c
+

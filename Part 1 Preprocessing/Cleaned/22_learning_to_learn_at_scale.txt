@@ -1,0 +1,445 @@
+Posted on 2 Feb 2026 — CC-BY 4.0 — https://doi.org/10.36227/techrxiv.177004918.80536924/v1 — e-Prints posted on TechRxiv are preliminary reports that are not peer reviewed. They should not b...
+Fan Wang1, Zixuan Wang2, Zhiyuan Chen1, Bo Yu1, Yiming Gan3, and Shaoshan Liu1
+1Shenzhen Institute of Artiﬁcial Intelligence and Robotics for Society
+2Institute of Automation, Chinese Academy of Sciences
+3Institute of Computing Technology, Chinese Academy of Sciences
+February 02, 2026
+Abstract
+Contemporary AI models face a critical limitation after deployment: the inability to sustain learning independently. We analyze
+learning-to-learn (L2L) and unsupervised pretraining, demonstrating that existing L2L fails to scale eﬀectively and that the
+in-context learning (ICL) paradigms emerging from unsupervised pretraining are inherently fragile. Substantive advancement
+requires a scalable form of L2L to develop AI systems capable of continuous adaptation through longitudinal data streams and
+trainable memory mechanisms.
+Learning-to-Learn at Scale: Promises and Challenges
+* Fan Wang1, Zixuan Wang3, Zhiyuan Chen1, Bo Yu1, Yiming Gan2, and Shaoshan Liu1
+1Shenzhen Institute of Artificial Intelligence and Robotics for Society, Shenzhen, China
+2Institute of Computing Technology, Chinese Academy of Sciences, Beijing, China
+3Institute of Automation, Chinese Academy of Sciences, Beijing, China
+Contemporary AI models face a critical limitation after deployment:
+the inability to sustain learning independently. We analyze learning-to-
+learn (L2L) and unsupervised pretraining, demonstrating that existing
+L2L fails to scale effectively and that the in-context learning (ICL)
+paradigms emerging from unsupervised pretraining are inherently
+fragile. Substantive advancement requires a scalable form of L2L
+to develop AI systems capable of continuous adaptation through
+longitudinal data streams and trainable memory mechanisms.
+1. Introduction
+F
+oundation models demonstrate a remarkable ability to
+solve tasks in zero-shot or few-shot settings. However,
+their limited memory and learning capacities remain significant,
+unresolved challenges. Optimizing the learning mechanism
+itself has become a fundamental focus in agentic systems and
+large-scale foundation models.
+Learning-to-learn (L2L, or
+meta-learning) [15] and nested learning [2] are among the
+most target-directed methods for this optimization. As shown
+in Table 1, an L2L framework contains at least two nested
+learning loops: the outer loop searches for slow weights♠, which
+determine, for instance, the initial parameters and learning
+functionalities for the inner loop; the inner loop adapts the
+fast weights based on the slow weights.
+One key factor in the success of large language models
+(LLMs) is their ability to learn without parameter updates.
+This capability, widely recognized as In-Context Learning
+(ICL), can be achieved, for example, by forming fast weights
+such as caches and memory states. Unsupervised pre-training
+on natural-language corpora has produced many successful
+ICL instances. In contrast, L2L approaches have remained
+comparatively stagnant, despite pre-training never explicitly
+targeting learning abilities, while L2L explicitly does. Recently,
+the growing emphasis on self-directed learning and long-term
+memory in agentic systems has revived interest in nested
+learning [2, 17].
+This study begins by analyzing the two primary classes
+of inner-loop learners: gradient-based and model-based. We
+then illustrate why model-based learners, such as those em-
+ploying in-context learning (ICL), have proven successful and
+are poised to dominate future inner loops. Next, we focus on
+efficiently meta-training these model-based learners. While
+pretraining on natural corpora has seen success, we argue that
+the emergent abilities resulting from this approach are less
+predictable and insufficiently efficient for optimizing model-
+based inner-loop learners. We attribute the past stagnation of
+L2L methods to failures in scaling task scope and model capa-
+*Corresponding to: fanwang.px@gmail.com
+♠Slow weights are parameters updated in the outer loop, such as standard model parameters. Fast
+weights, on the other hand, are updated in the inner loop, such as cache or memory states. These
+two sets of weights can overlap, as seen in model-agnostic meta-learning.
+(Outer-Loop)
+Meta-Trainer
+(Inner-Loop)
+Learner
+Examples
+Supervised
+Training
+Gradient-based
+MAML [6]
+Reinforcement
+Training
+Model-based
+RL2 [5]
+Unsupervised
+Pre-Training
+Model-based (ICL)
+LLM [3]
+Reinforcement
+Post-Training
+Model-based (CoT)
+DeepSeek-R1 [8]
+Table 1. A non-exhaustive list of variant methods under the learning-
+to-learn framework
+bility. Consequently, we discuss the necessity of transitioning
+from pretraining to L2L. Finally, we examine the key prereq-
+uisites for scaling L2L and analyze its associated challenges,
+the resolution of which will require greater consensus within
+the field.
+2. Poor Optimizability of Gradient-based Inner-Loop
+Learners
+Optimizing gradient-based learners has been a focal point
+across multiple research areas, including model-agnostic meta-
+learning (MAML) [6], automated machine learning (AutoML),
+and learning to optimize. Despite considerable interest ever
+since 2015, substantive advancements in this field have been
+constrained by several critical challenges. Firstly, the moni-
+toring and optimization of gradient descent methods are in-
+herently difficult due to the involvement of higher-order gradi-
+ents, which are computationally intensive or often infeasible
+to compute. Consequently, gradient-based learners are gener-
+ally limited to a small number of optimization steps, thereby
+restricting their adaptive capacity. Moreover, the backprop-
+agation process imposes significant computational overhead
+during inference, which restricts its practical utility. Secondly,
+the majority of gradient-based learners optimize only a limited
+subset of hyperparameters, such as the learning rate, while nu-
+merous other components remain manually configured. Effec-
+tive gradient-based learning necessitates meticulously designed
+data collection and curation strategies, objective functions,
+and optimizers, all of which pose substantial challenges. As a
+result, methodologies such as learning to optimize and MAML
+address only a minor portion of the overarching problem, if at
+all.
+ICL’s success has largely demonstrated that model-based
+learners are potentially more efficient than MAML and
+learning-to-optimize approaches. Behrouz et al. [2] conducted
+a systematic review of the nested-learning framework and
+January 23, 2026
+|
+1–6
+demonstrated that recurrent neural structures, such as linear
+attention [19], are equivalent to a gradient-based optimizer for
+a specific target function. However, this equivalence is only lo-
+cal. Because gradient descent involves multiple self-referential
+steps, it cannot be parallelized chunk-wise like (linear) self-
+attention. It offers an alternative lens through which to ex-
+amine why optimizing learning processes with long gradients
+poses a significantly greater challenge compared to optimizing
+sequence-encoding structures such as (linear) self-attention.
+This constraint necessitates moving away from nested learn-
+ing architectures, opting instead for a single learning loop
+that relies on standard fine-tuning or test-time training with
+manually designed optimizers and hyperparameters.
+3. Pre-training in Natural Corpra: Emergent Abilities
+with Less Predictability
+The emergence of ICL within large language models (LLMs)
+has become a fundamental aspect of these models and other
+large-scale architectures [3]. Initial observations of ICL in
+LLMs were primarily confined to instruction following and
+few-shot learning, but subsequent research has expanded its
+scope to include reflection, chain-of-thought (CoT) reason-
+ing [20], and reinforcement learning [17]. Scholarly analyses
+have explored the mechanisms underlying the emergence of
+ICL, identifying critical factors such as model capacity [14]
+and data distribution [4, 13].
+Despite the considerable success of pre-trained models,
+concerns have emerged regarding the opacity of current pre-
+training processes. Although pre-training aims to foster multi-
+faceted foundational capabilities, such as zero-shot knowledge
+transfer, reasoning, and ICL, the emergence of these abili-
+ties remains unpredictable. For instance, it is often unclear
+whether a model’s task-solving skills derive from paramet-
+ric memories acquired through in-weight learning♠(IWL) or
+genuine ICL. This issue, despite its importance, has received
+limited attention. Recent studies have begun to acknowledge
+and investigate this phenomenon, arguing that it significantly
+undermines the value of existing benchmarks and misdirects
+the development of large-scale models [11].
+In contrast, the post-training stage typically focuses on
+deliberately incentivizing specific abilities, such as enhancing
+human–AI alignment [12] and chain-of-thought (CoT) reason-
+ing [8], through reinforcement learning. However, because this
+stage is limited to fine-tuning, the capabilities of the foun-
+dation models remain largely determined by the pre-training
+phase, motivating recent preliminary efforts to further scale
+reinforcement learning.
+The limitations of existing ICL have been investigated
+from multiple perspectives. These include the tendency of
+LLMs to lose track in long contexts [10], during multi-turn
+conversations [9], and in multi-turn environment interactions
+[17]. In particular, the ICL abilities of large-scale multimodal
+models are generally considered significantly inferior to those
+of LLMs.
+Pre-trained Models Can be Bad In-Context Learn-
+ers. Vision Language Models (VLMs) can perform zero-shot
+indoor navigation tasks reasonably well with appropriate text
+♠In-weight learning refers to the acquisition of abilities by directly memorizing knowledge within a
+model’s parameters during training. This contrasts with ICL, which acquires abilities from real-time
+contextual information during inference.
+Fig. 1. Experiment settings (top) and results (bottom) of VLMs as navigation agents,
+showing that context has a negative effect in the ObjectNav task.
+and image prompts. We follow the experimental setup of Goet-
+ting et al. [7] and employ a VLM to accomplish the ObjectNav
+task, extending it from zero-shot to many-shot navigation
+scenarios. In the experimental setup, at each step, the agent
+receives an RGB image from the robot’s front camera, along
+with target points representing candidate next positions. The
+model then selects the ID of the position corresponding to
+the next location (see top of Figure 1). For each house, we
+provide pre-generated room tour records for the VLM to utilize.
+Ideally, a longer room tour observed in context would lead
+to a higher success rate (SR) and Success weighted by Path
+Length (SPL), as the model would be able to use abundant
+experiences and memories to reason about the goal and the
+path. We evaluate the performance of QwenVL-2-7B [18] on
+the ObjectNav benchmark across 100 Habitat 3D scenes, using
+carefully tuned prompts to instruct navigation. Unfortunately,
+the model exhibits almost no ability to learn from context;
+instead, it performs best in the zero-shot setting, as shown in
+Figure 1.
+Manually designed workflow and memory modules
+act as stand-ins for genuine learning and memory.
+Built upon foundation models, agentic systems extend the
+model’s memory and learning capabilities to tackle more com-
+plex tasks. They typically employ highly engineered workflows
+for reasoning, memorization, and learning, using hand-designed
+long-term and working memories, along with knowledge re-
+trieval techniques, to manipulate the injected context and
+simulate learning. However, while these workflows excel in
+tasks requiring fragmented memory retrieval, they struggle
+with continual, real-time refinement, which is crucial for ac-
+quiring complex skills such as decision-making and locomotion.
+In essence, these agentic memories primarily compensate for
+the foundation model’s lack of inherent memory and learning
+capabilities.
+Wang et al.
+Seen Task Performance
+（Upper Bound）
+Unseen Task Performance
+（Lower Bound）
+Generalization 
+Gap
+Increasing Task Coverage
+Fig. 2. Wang et al. [17] reported that in-context reinforcement learning agents, eval-
+uated on random Markov Decision Processes, exhibit a trade-off: increasing the
+number of inference steps and varying the scope of meta-training tasks improves gen-
+eralization, but at the cost of reduced zero-shot performance and a longer adaptation
+period.
+4. Stagnation of Learning to Learn: Limited by Task
+Scope and Scale
+Previous research has identified key factors influencing the
+emergence of ICL ability, including parameter scale and data
+distribution.
+Because these characteristics are inherent in
+natural corpora, pre-training datasets can incentivize ICL to
+some extent, even without explicit design. In fact, the unsu-
+pervised pre-training framework shares similarities with many
+L2L methods. However, L2L research has largely stagnated
+due to limitations in the scale and scope of previous artificially
+designed tasks. Prior work has confined L2L to fixed train-
+ing and testing tasks, involving a relatively small number of
+training tasks (e.g., a few hundred) within a scope limited to
+domain-randomized environments derived from one or a few
+seed environments. Consequently, models may appear capable
+of learning, but they adapt to only a narrow range of tasks,
+limiting their practical applicability. In contrast, pre-training
+data encompasses a much broader range of tasks, emphasiz-
+ing inner-loop performance rather than specific training set
+content. Furthermore, while most L2L studies concentrate
+on few-shot performance, largely neglecting many-shot and
+continual learning, the context in the pre-training of LLMs
+typically exceeds 8,000 tokens.
+Existing studies have shown that task scope affects the
+generalizability of meta-learning models. In canonical L2L
+settings, the number and diversity of tasks are often limited.
+Consequently, models adapt quickly to similar tasks but gener-
+alize poorly to new, unseen tasks. Conversely, a model trained
+on a broader range of tasks can adapt to new tasks, but this
+comes at the cost of lower initial performance and a longer
+adaptation period (see Figure 2). These trade-offs diminish
+the benefits of scaling L2L; if improved performance requires
+significant sacrifices, it may be more efficient to simply include
+more tasks of interest, similar to pre-training settings.
+5. Scale is Not Enough: From Pre-training to Learning
+To Learn
+If scale and scope are the bottleneck, the next question is
+whether scaling pre-training alone will suffice. We empha-
+size a crucial distinction between pre-training and L2L that
+may influence future research directions: pre-training is less
+concerned with whether a benchmark is solved via in-weight
+learning (IWL) or ICL, whereas L2L specifically aims for the
+model to solve the same benchmark relying more on ICL than
+IWL.
+While IWL efficiently memorizes knowledge encountered
+during training, it struggles with mappings that exhibit in-
+herent diversity. For example, next-token prediction for con-
+vergent queries like "2 + 2 = " or "What is the diameter of
+the 3arth?" can be effectively solved by IWL. In contrast, the
+question "What is in the bedroom?" admits an open-ended,
+diverse set of valid continuations. Datasets dominated by the
+former encourage IWL, which is confined to the parameter-
+tuning phase and remains inactive during inference. Sequences
+that are "bursty"—that is, display strong intra-sequence corre-
+lations—enhance ICL [4]. For instance, if the statements "My
+bedroom was plain with only a bed and a table" and "There
+is no TV in my bedroom" appear together, the model can
+leverage its ICL abilities to capture the coherence between
+them. In contrast, a model restricted to IWL might output
+"60 percent of families have a TV in their bedroom," faithfully
+echoing training statistics but failing to resolve the specific
+situation implied by the immediate context.
+The relative importance of IWL versus ICL can also vary
+across modalities, as suggested by the ongoing debate about
+why diffusion and VAE architectures excel in image and video
+generation while autoregressive models dominate language gen-
+eration. Evidence from vision-language models further clarifies
+this distinction: after normalizing for data scale and vocabulary
+size, the estimated minimal achievable loss is approximately
+18.3 for language tokens and 53.3 for vision tokens [1]. This
+gap isn’t simply because "images are harder"; it reflects the in-
+tuition that images contain abundant information that cannot
+be definitively determined. For example, the prompt "a picture
+of a graduate student’s bedroom" allows for vast diversity in
+assets, time of day, perspective, textures, era, and even the
+occupant’s personality. These represent only the major axes
+of variation, with fine-grained details proving even harder to
+specify. To date, little research has explored how many words
+are required to fully "determine" an image, leaving image and
+video generation in a regime of generating what merely "looks
+reasonable." Consequently, images exhibit greater intrinsic di-
+versity compared to language, necessitating powerful denoising
+structures like diffusion. While imagining an unseen room is
+challenging for both humans and machines, recalling its details
+is easy once the room has been visited. This suggests the
+importance of context-dependent prediction in image gener-
+ation [16]. A similar argument applies to agent actions and
+embodied intelligence, where the predicting space is further
+enlarged by varied tools and embodiments.
+These observations suggest that scaling IWL alone has
+limitations. As more modalities and inherent diversities are
+incorporated, ICL may become increasingly critical. However,
+because the conditions under which ICL emerges (including
+data distribution and memory capacity) are somewhat strin-
+gent, simply scaling up a pre-training framework not inten-
+tionally designed for ICL may inadvertently enhance other
+abilities, such as IWL, without a proportional improvement in
+ICL.
+6. Prerequisites for Scaling Learning to Learn
+Figure 3 highlights the key distinctions between existing
+pre-training frameworks and scalable L2L frameworks. Pre-
+training on fragmented data primarily promotes zero-shot and
+few-shot learning; however, due to limitations in short-term
+memory, the model’s recollections are constrained. In contrast,
+Wang et al.
+January 23, 2026
+|
+Fig. 3. Comparing pre-training and learning-to-learn: key prerequisites are full lifecycle data and long-term memories
+models with strong ICL capabilities could potentially learn
+continuously over extended periods. Furthermore, integrating
+prediction, reasoning, decision-making, and learning skills may
+lead to the creation of a versatile, self-directed agent workflow.
+Previous studies suggest that realizing effective ICL necessi-
+tates at least learning from full life-cycle data with long-term
+memory [4, 13, 16, 17].
+Scalable full lifecycle data.
+To meet L2L’s data-
+distribution requirements, we define full-lifecycle data as long
+sequences that capture an agent’s entire lifetime. Unlike frag-
+mented data, which addresses only isolated problems, lifecycle
+data is characterized by: (1) Coherent, long-context sequences,
+each covering the lifetime of one individual and exhibiting
+strong intra-sequence coherence [4]. These sequences may even
+portray an agent’s learning process, for example, gradually
+mastering a skill from scratch. (2) Scalability, encompassing
+both the number of individuals and their diversity, is crucial.
+Insufficient scale or diversity inhibits the emergence of ICL,
+while promoting IWL instead [13, 17].
+Scalable and trainable long-term memory. For L2L
+agents to be practical, they must retain an unbounded stream
+of experience, accumulating lifelong memories without forget-
+ting the most important knowledge and skills. At the same
+time, they must generate context-relevant responses with la-
+tency that grows at most linearly with sequence length; users
+will not tolerate agents whose “thinking time” increases with
+history. Here “trainable” emphasizes that the memory mecha-
+nism is explicitly trained to meet the requirements of lifelong
+learning, rather than relying on manually encoded context-
+management rules or fixed memory modules.
+Trainability
+enables the agent to selectively retain and forget content, as
+well as to integrate historical memories so as to master new
+skills and knowledge.
+7. Challenges
+Though promising, scaling L2L suffers from several practical
+challenges that divert attention and limit its potential.
+Tasks lack breadth and diversity. Most foundation
+Fig. 4. The inclusion of seemingly irrelevant open-world tasks in training can hinder
+performance of target benchmarks, especially in few-shot scenarios. Generality is
+not always advantageous in benchmark evaluations, as it incurs higher costs in terms
+of training data and inference time and is consistently less efficient than focusing on
+more closely related training tasks.
+models are trained on real-world datasets or close simulations.
+However, these datasets capture only a fraction of real-world
+complexity, while a generalist agent must cope with the world’s
+open-ended diversity. This narrow task scope directly limits
+the practicality of both pre-training and L2L. The issue is
+not just the number of tasks, but also their diversity and
+scope. Consequently, expanding to simulations and synthetic
+data beyond real-world datasets is no longer optional, but a
+necessity.
+Trapped in benchmark evaluation:
+L2L appears
+more costly and less efficient. As illustrated in Figure 4,
+existing theoretical findings indicate that adding more diverse
+training tasks, now considered essential for L2L, can render
+the solution of specific benchmarks more difficult: it demands
+more training data and longer sequences, leaves the model
+less zero-shot capable at inference time, and further requires
+extended contexts to tackle the benchmarks. In contrast, re-
+lying on IWL and training with more tasks "closer" to the
+Wang et al.
+target benchmarks remains the more cost-effective strategy.
+The central issue is the current lack of a metric for measuring
+the distance between training and evaluation tasks. Address-
+ing this deficiency requires a consensus on the appropriate
+differences between benchmarks and training tasks.
+Memory-efficient architectures remain to be ex-
+plored. Transformer backbones are generally inefficient for
+long-context learning. Conversely, for foundation models using
+Transformer backbones, IWL is generally preferable to ICL.
+While the development of recursive architectures—such as
+fast-weight programmers, brain-inspired plasticity rules, state-
+space models, and linear-attention variants—promises better
+asymptotic efficiency, these architectures cannot yet match the
+memorization capabilities of transformers. Furthermore, in
+current agentic systems, memory is not genuinely embedded
+within the parameters and co-optimized with the rest of the
+model, hindering the integration of complex skills and knowl-
+edge. Therefore, the key challenge is developing architectures
+that are both computationally efficient and capable of lifelong
+retention. Given these inherent trade-offs, perfect linear-time
+recall without forgetting is likely impossible; instead, a gener-
+alist agent must actively decide what to retain and what to
+discard, balancing retention capacity against computational
+cost in a principled, data-driven manner.
+8. Conclusion
+This study analyzes approaches for transforming foundation
+models into continuous learners, rather than static memorizers,
+and emphasizes the potential of scaling the learning-to-learn
+(L2L) framework. We identify the primary limitations, prereq-
+uisites, and challenges of current L2L methods. These analyses
+illustrate why scaling L2L is a promising but difficult path,
+constrained by practical considerations.
+9. ACKNOWLEDGMENTS
+This project is supported by Longgang District Shenzhen’s
+“Ten Action Plan” for supporting innovation projects (Grant
+LGKCSDPT2024002)
